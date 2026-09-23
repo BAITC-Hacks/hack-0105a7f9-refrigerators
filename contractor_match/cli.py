@@ -7,7 +7,7 @@ import sys
 from pydantic import ValidationError
 
 from .models import RecommendationRequest
-from .service import recommend
+from .service import RecommendationInputError, recommend
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -43,9 +43,12 @@ def main(argv: list[str] | None = None) -> int:
             brief=args.brief,
         )
         response = recommend(request)
-    except (ValidationError, ValueError) as error:
+    except (ValidationError, RecommendationInputError) as error:
         print(f"Ошибка ввода: {error}", file=sys.stderr)
         return 2
+    except (OSError, ValueError) as error:
+        print(f"Ошибка каталога: {error}", file=sys.stderr)
+        return 1
 
     if args.json:
         print(json.dumps(response.model_dump(mode="json"), ensure_ascii=False, indent=2))

@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+import csv
 import json
 import os
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import AsyncMock, Mock, patch
 
 import httpx
@@ -11,6 +14,7 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from contractor_match.api import app
+from contractor_match import catalogue as catalogue_module
 from contractor_match.catalogue import load_catalogue
 from contractor_match.explanations import generate_explanations
 from contractor_match.models import RecommendationRequest
@@ -230,10 +234,17 @@ class RecommendationTests(unittest.TestCase):
         self.assertEqual(len(response.json()["cards"]), 3)
         wrong_date = request().model_dump(mode="json")
         wrong_date["date"] = "2027-01-01"
-        self.assertEqual(client.post("/recommendations", json=wrong_date).status_code, 422)
+        date_error = client.post("/recommendations", json=wrong_date)
+        self.assertEqual(date_error.status_code, 422)
+        self.assertEqual(date_error.json()["error"]["code"], "invalid_request")
+        self.assertEqual(date_error.json()["error"]["details"][0]["field"], "date")
         wrong_city = request(city="Алматы").model_dump(mode="json")
         wrong_city["city"] = "Караганда"
-        self.assertEqual(client.post("/recommendations", json=wrong_city).status_code, 422)
+        city_error = client.post("/recommendations", json=wrong_city)
+        self.assertEqual(city_error.status_code, 422)
+        self.assertEqual(city_error.json()["error"]["code"], "invalid_request")
+        self.assertEqual(city_error.json()["error"]["details"][0]["field"], "city")
+        self.assertEqual(client.get("/health").json(), {"status": "ok"})
 
     def test_options_and_case_insensitive_input(self) -> None:
         client = TestClient(app)
@@ -263,7 +274,41 @@ class RecommendationTests(unittest.TestCase):
         unknown["category"] = "ведущеее"
         response = client.post("/recommendations", json=unknown)
         self.assertEqual(response.status_code, 422)
-        self.assertIn("Доступны:", response.json()["detail"])
+        self.assertIn("Доступны:", response.json()["error"]["details"][0]["message"])
+
+    def test_catalogue_validation_rejects_corrupted_profiles(self) -> None:
+        with catalogue_module.DATA_FILE.open(encoding="utf-8-sig", newline="") as source:
+            reader = csv.DictReader(source)
+            fieldnames = reader.fieldnames
+            rows = list(reader)
+        self.assertIsNotNone(fieldnames)
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "contractors.csv"
+            for field, value, expected in (
+                ("price_from_kzt", "0", "price_from_kzt"),
+                ("busy_dates", "2027-01-01", "busy_dates"),
+                ("description", "", "description"),
+            ):
+                with self.subTest(field=field):
+                    changed = [row.copy() for row in rows]
+                    changed[0][field] = value
+                    with path.open("w", encoding="utf-8", newline="") as target:
+                        writer = csv.DictWriter(target, fieldnames=fieldnames)
+                        writer.writeheader()
+                        writer.writerows(changed)
+                    with patch.object(catalogue_module, "DATA_FILE", path):
+                        load_catalogue.cache_clear()
+                        with self.assertRaisesRegex(ValueError, expected):
+                            load_catalogue()
+                        load_catalogue.cache_clear()
+
+    def test_invalid_catalogue_prevents_api_startup(self) -> None:
+        with TestClient(app) as client:
+            self.assertEqual(client.get("/health").json(), {"status": "ok"})
+        with patch("contractor_match.api.load_catalogue", side_effect=ValueError("bad catalogue")):
+            with self.assertRaisesRegex(ValueError, "bad catalogue"):
+                with TestClient(app):
+                    pass
 
 
 if __name__ == "__main__":

@@ -79,3 +79,18 @@ class CatalogueOptions(BaseModel):
     languages: list[str]
     calendar_start: date
     calendar_end: date
+
+
+class InputIssue(BaseModel):
+    field: str
+    message: str
+
+
+class ApiError(BaseModel):
+    code: Literal["invalid_request"] = "invalid_request"
+    message: str = "Проверьте параметры запроса."
+    details: list[InputIssue]
+
+
+class ErrorResponse(BaseModel):
+    error: ApiError

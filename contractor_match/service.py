@@ -22,6 +22,12 @@ REASON_LABELS = {
 }
 
 
+class RecommendationInputError(ValueError):
+    def __init__(self, field: str, message: str) -> None:
+        super().__init__(message)
+        self.field = field
+
+
 def _lookup_name(value: str, available: set[str]) -> str | None:
     normalized = " ".join(value.casefold().split())
     return next(
@@ -99,12 +105,14 @@ def recommend(request: RecommendationRequest) -> RecommendationResponse:
     city = _lookup_name(request.city, cities)
     category = _lookup_name(request.category, categories)
     if city is None:
-        raise ValueError(
+        raise RecommendationInputError(
+            "city",
             f"Города «{request.city}» нет в каталоге. "
             f"Доступны: {', '.join(sorted(cities))}."
         )
     if category is None:
-        raise ValueError(
+        raise RecommendationInputError(
+            "category",
             f"Категории «{request.category}» нет в каталоге. "
             f"Доступны: {', '.join(sorted(categories))}."
         )
