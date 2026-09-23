@@ -58,6 +58,13 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(response.model_dump(mode="json"), ensure_ascii=False, indent=2))
     else:
         print(response.message)
+        understood = response.understanding
+        if request.brief:
+            print(f"Поняли: стиль — {', '.join(understood.styles) or 'не распознан'}; "
+                  f"язык — {understood.effective_language or 'не задан'}; "
+                  f"нежелательно — {', '.join(understood.unwanted) or 'не распознано'}.")
+            for note in understood.notes:
+                print(f"  {note}")
         for index, card in enumerate(response.cards, 1):
             price = f"{card.price_from_kzt:,}".replace(",", " ")
             tags = [
@@ -71,6 +78,15 @@ def main(argv: list[str] | None = None) -> int:
             ]
             print(f"\n{index}. {card.name} ({card.id}) — {card.category}, {card.city}")
             print(f"   Цена от {price} ₸" + (f" [{', '.join(tags)}]" if tags else ""))
-            print(f"   {card.explanation}")
+            print(f"   Почему подходит: {card.explanation}")
+            for note in card.to_clarify:
+                print(f"   Уточнить: {note}")
+            for difference in card.differences:
+                print(f"   Отличие: {difference}")
+        for alternative in response.alternatives:
+            print(f"\nЧто изменить: {alternative.message}")
+        if response.alternatives_note:
+            print(response.alternatives_note)
+        print(f"Ранжирование: {response.ranking_mode}; причина: {response.ranking_reason}")
         print(f"\nРежим объяснений: {response.ai_mode}; причина: {response.ai_reason}")
     return 0

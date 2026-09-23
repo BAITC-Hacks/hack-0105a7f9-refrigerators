@@ -14,7 +14,7 @@ EventFormat = Literal[
 ]
 Language = Literal["русский", "казахский", "английский"]
 Status = Literal["matched", "category_absent", "no_eligible"]
-AiMode = Literal["openai", "nvidia", "fallback", "not_used"]
+AiMode = Literal["openai", "nvidia", "brev", "fallback", "not_used"]
 AiReason = Literal[
     "success", "not_needed", "local_requested", "missing_key", "timeout",
     "auth_error", "rate_limited", "network_error", "provider_error",
@@ -81,6 +81,34 @@ class Card(BaseModel):
     explanation: str
     evidence_quote: str
     evidence_note: str | None = None
+    why_fits: list[str] = Field(default_factory=list)
+    to_clarify: list[str] = Field(default_factory=list)
+    differences: list[str] = Field(default_factory=list)
+
+
+class BriefUnderstanding(BaseModel):
+    method: Literal["local_rules"] = "local_rules"
+    styles: list[str] = Field(default_factory=list)
+    unwanted: list[str] = Field(default_factory=list)
+    languages: list[Language] = Field(default_factory=list)
+    effective_language: Language | None = None
+    language_source: Literal["field", "brief", "unspecified"] = "unspecified"
+    notes: list[str] = Field(default_factory=list)
+
+
+class ConditionChange(BaseModel):
+    field: Literal["date", "budget_kzt", "duration_hours"]
+    from_value: str | int | float
+    to_value: str | int | float
+
+
+class Alternative(BaseModel):
+    changes: list[ConditionChange]
+    request: RecommendationRequest
+    eligible_count: int
+    added_count: int
+    candidate_ids: list[str]
+    message: str
 
 
 class SelectionCounts(BaseModel):
@@ -98,6 +126,11 @@ class RecommendationResponse(BaseModel):
     ai_mode: AiMode
     ai_reason: AiReason = "not_needed"
     counts: SelectionCounts = Field(default_factory=SelectionCounts)
+    understanding: BriefUnderstanding = Field(default_factory=BriefUnderstanding)
+    alternatives: list[Alternative] = Field(default_factory=list)
+    alternatives_note: str | None = None
+    ranking_mode: Literal["tfidf", "brev", "not_used"] = "not_used"
+    ranking_reason: str = "not_needed"
 
 
 class CatalogueOptions(BaseModel):

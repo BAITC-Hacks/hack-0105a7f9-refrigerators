@@ -58,7 +58,7 @@ def fixture_catalogue(profiles):
 
 class HardeningTests(unittest.TestCase):
     def setUp(self):
-        env = patch.dict(os.environ, {"AI_PROVIDER": "local", "OPENAI_API_KEY": "", "NVIDIA_API_KEY": ""})
+        env = patch.dict(os.environ, {"AI_PROVIDER": "local", "RANKING_PROVIDER": "tfidf", "OPENAI_API_KEY": "", "NVIDIA_API_KEY": ""})
         env.start()
         self.addCleanup(env.stop)
 

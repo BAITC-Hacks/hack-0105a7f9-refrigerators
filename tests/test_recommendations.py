@@ -40,7 +40,7 @@ class RecommendationTests(unittest.TestCase):
     def setUp(self) -> None:
         self.no_key = patch.dict(
             os.environ,
-            {"OPENAI_API_KEY": "", "NVIDIA_API_KEY": "", "AI_PROVIDER": "openai"},
+            {"OPENAI_API_KEY": "", "NVIDIA_API_KEY": "", "AI_PROVIDER": "openai", "RANKING_PROVIDER": "tfidf"},
         )
         self.no_key.start()
         self.addCleanup(self.no_key.stop)
