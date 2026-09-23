@@ -1,6 +1,6 @@
 import {ApiClientError, buildRecommendationRequest, createApiClient, createLatestRecommender} from '../integration/api-client.mjs';
 
-const baseUrl = globalThis.EVENT_API_BASE_URL ?? 'http://127.0.0.1:8000';
+const baseUrl = globalThis.EVENT_API_BASE_URL ?? globalThis.location.origin;
 const api = createApiClient({baseUrl});
 const latest = createLatestRecommender(api);
 const form = document.getElementById('event-form');
@@ -380,3 +380,4 @@ window.addEventListener('pagehide', () => latest.cancel());
 
 alternativesPanel.append(waiting('Запасные пути появятся здесь', 'После подбора покажем соседние условия и то, что нужно уточнить по пожеланиям.'));
 loadOptions();
+
