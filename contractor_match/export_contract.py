@@ -38,10 +38,15 @@ def _typescript(schema: dict) -> str:
 
 def build_artifacts() -> dict[str, str]:
     # Keys can exist on a developer machine; export must never invoke a provider.
-    with patch.dict(os.environ, {"AI_PROVIDER": "local", "RANKING_PROVIDER": "tfidf", "CORS_ALLOWED_ORIGINS": ""}):
+    with patch.dict(os.environ, {"AI_PROVIDER": "local", "RANKING_PROVIDER": "tfidf", "CORS_ALLOWED_ORIGINS": "", "CATALOGUE_PROVIDER": "csv"}):
         from fastapi.testclient import TestClient
         from .api import create_app
         from .demo import BASE, HOST
+        from .catalogue import load_catalogue
+        from .ranking import catalog_index
+
+        load_catalogue.cache_clear()
+        catalog_index.cache_clear()
 
         app = create_app()
         schema = app.openapi()

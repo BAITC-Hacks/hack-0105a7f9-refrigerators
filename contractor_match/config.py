@@ -9,6 +9,36 @@ class ConfigurationError(RuntimeError):
     """Safe configuration error: never includes environment values or keys."""
 
 
+@dataclass(frozen=True)
+class CatalogueSettings:
+    provider: str
+    url: str = ""
+    key: str = field(default="", repr=False)
+
+
+def load_catalogue_settings() -> CatalogueSettings:
+    provider = os.getenv("CATALOGUE_PROVIDER", "csv").strip().casefold()
+    if provider not in {"csv", "supabase"}:
+        raise ConfigurationError("CATALOGUE_PROVIDER должен быть csv или supabase.")
+    if provider == "csv":
+        return CatalogueSettings(provider)
+    value = os.getenv("SUPABASE_URL", "").strip().rstrip("/")
+    try:
+        parsed = urlsplit(value)
+        valid = (parsed.scheme == "https" and parsed.hostname
+                 and parsed.hostname.endswith(".supabase.co")
+                 and not parsed.username and not parsed.password and not parsed.query
+                 and not parsed.fragment and not parsed.path and parsed.port in {None, 443})
+    except ValueError:
+        valid = False
+    if not valid:
+        raise ConfigurationError("SUPABASE_URL: нужен HTTPS-адрес проекта *.supabase.co без пути и ключей.")
+    key = os.getenv("SUPABASE_SECRET_KEY", "").strip()
+    if not key or "\n" in key or "\r" in key:
+        raise ConfigurationError("Укажите серверный SUPABASE_SECRET_KEY в окружении backend.")
+    return CatalogueSettings(provider, value, key)
+
+
 def load_cors_origins() -> list[str]:
     defaults = ",".join(f"http://{host}:{port}" for host in ("localhost", "127.0.0.1")
                         for port in (3000, 4317, 5173))

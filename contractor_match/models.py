@@ -149,7 +149,7 @@ class InputIssue(BaseModel):
 
 class ApiError(BaseModel):
     code: Literal["invalid_request", "service_misconfigured", "internal_error", "not_found",
-                  "method_not_allowed", "http_error"] = "invalid_request"
+                  "method_not_allowed", "http_error", "catalogue_unavailable"] = "invalid_request"
     message: str = "Проверьте параметры запроса."
     details: list[InputIssue]
 

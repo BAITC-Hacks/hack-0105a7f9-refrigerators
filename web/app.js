@@ -1,6 +1,10 @@
 import {ApiClientError, buildRecommendationRequest, createApiClient, createLatestRecommender} from '../integration/api-client.mjs';
 
-const baseUrl = globalThis.EVENT_API_BASE_URL ?? 'http://127.0.0.1:8000';
+// Public deployment and `uvicorn app:app` use one origin. Preserve the documented
+// two-server local workflow on the static development server's port.
+const separateDevServer = ['localhost', '127.0.0.1'].includes(location.hostname)
+  && location.port === '5173';
+const baseUrl = globalThis.EVENT_API_BASE_URL ?? (separateDevServer ? 'http://127.0.0.1:8000' : '');
 const api = createApiClient({baseUrl});
 const latest = createLatestRecommender(api);
 const form = document.getElementById('event-form');

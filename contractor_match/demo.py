@@ -74,6 +74,7 @@ def main() -> int:
     args = parser.parse_args()
     os.environ["AI_PROVIDER"] = args.provider
     os.environ["RANKING_PROVIDER"] = args.ranking
+    os.environ["CATALOGUE_PROVIDER"] = "csv"
     try:
         settings = load_settings()
     except ConfigurationError as error:

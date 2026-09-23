@@ -58,7 +58,14 @@ def run_checks(frontend_origin: str | None = None) -> dict:
         have_dependencies = False
 
     # Settings/CORS use stdlib and can still be checked before pip install.
-    from .config import ConfigurationError, load_cors_origins, load_ranking_settings, load_settings
+    from .config import ConfigurationError, load_catalogue_settings, load_cors_origins, load_ranking_settings, load_settings
+    try:
+        catalogue = load_catalogue_settings()
+        add("catalogue_source", "ok", "Выбран исходный CSV." if catalogue.provider == "csv" else
+            "Настройки Supabase заполнены. Доступ к базе не проверялся; ниже проверяется локальный эталон CSV.",
+            provider=catalogue.provider, live_database_checked=False)
+    except ConfigurationError as error:
+        add("catalogue_source", "error", str(error), live_database_checked=False)
     try:
         settings = load_settings()
         if settings.requested_provider == "local":

@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException
 
 from .catalogue import load_catalogue
+from .supabase_catalogue import CatalogueUnavailable
 from .config import ConfigurationError, load_cors_origins, load_settings
 from .models import (
     ApiError,
@@ -42,8 +43,13 @@ DIAGNOSTIC_HEADERS = {
 async def lifespan(_app: FastAPI):
     configure_logging()
     load_settings()
-    load_catalogue()
-    catalog_index()
+    try:
+        load_catalogue()
+        catalog_index()
+    except CatalogueUnavailable:
+        # Allow HTTP 503 + request_id and recovery on the next request. Failed
+        # loads are never cached; invalid local files still fail at startup.
+        logger.warning("catalogue_unavailable_at_startup")
     yield
 
 
@@ -108,6 +114,13 @@ async def configuration_error(_request: Request, error: ConfigurationError) -> J
     return JSONResponse(status_code=503, content=payload.model_dump())
 
 
+async def catalogue_error(_request: Request, _error: CatalogueUnavailable) -> JSONResponse:
+    payload = ErrorResponse(error=ApiError(
+        code="catalogue_unavailable", message="Каталог временно недоступен. Попробуйте позже.", details=[],
+    ))
+    return JSONResponse(status_code=503, content=payload.model_dump())
+
+
 async def http_error(_request: Request, error: HTTPException) -> JSONResponse:
     code, message = {
         404: ("not_found", "Маршрут API не найден."),
@@ -154,6 +167,7 @@ def create_app() -> FastAPI:
     api.add_exception_handler(RequestValidationError, request_validation_error)
     api.add_exception_handler(RecommendationInputError, recommendation_input_error)
     api.add_exception_handler(ConfigurationError, configuration_error)
+    api.add_exception_handler(CatalogueUnavailable, catalogue_error)
     api.add_exception_handler(HTTPException, http_error)
     # CORS wraps the error handler; request tracing also wraps preflight responses.
     api.middleware("http")(safe_unexpected_error)

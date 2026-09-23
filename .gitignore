@@ -9,3 +9,7 @@ __pycache__/
 node_modules/
 .next/
 logs/
+.vercel/
+
+.vercel
+.env*

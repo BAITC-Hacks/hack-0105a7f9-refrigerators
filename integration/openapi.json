@@ -356,7 +356,8 @@
               "internal_error",
               "not_found",
               "method_not_allowed",
-              "http_error"
+              "http_error",
+              "catalogue_unavailable"
             ],
             "title": "Code",
             "default": "invalid_request"

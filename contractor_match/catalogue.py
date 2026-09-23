@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import get_args
 
 from .models import FIRST_DATE, LAST_DATE, EventFormat, Language
+from .config import load_catalogue_settings
 
 
 DATA_FILE = Path(__file__).resolve().parent.parent / "data" / "contractors.csv"
@@ -128,4 +129,8 @@ def load_catalogue() -> tuple[Profile, ...]:
     profiles = read_catalogue(DATA_FILE)
     if len(profiles) != 66 or sum(p.synthetic for p in profiles) != 13:
         raise ValueError("В исходном наборе ожидаются 66 профилей, включая 13 синтетических")
+    settings = load_catalogue_settings()
+    if settings.provider == "supabase":
+        from .supabase_catalogue import fetch_catalogue
+        return fetch_catalogue(settings, profiles)
     return profiles

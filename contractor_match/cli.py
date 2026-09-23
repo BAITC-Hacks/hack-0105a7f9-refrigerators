@@ -38,6 +38,7 @@ def main(argv: list[str] | None = None) -> int:
     from .models import RecommendationRequest
     from .observability import configure_logging
     from .service import RecommendationInputError, recommend
+    from .supabase_catalogue import CatalogueUnavailable
     configure_logging()
     try:
         request = RecommendationRequest(
@@ -56,6 +57,9 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     except ConfigurationError as error:
         print(f"Ошибка конфигурации: {error}", file=sys.stderr)
+        return 1
+    except CatalogueUnavailable as error:
+        print(str(error), file=sys.stderr)
         return 1
     except (OSError, ValueError) as error:
         print(f"Ошибка каталога: {error}", file=sys.stderr)
