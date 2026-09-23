@@ -1,0 +1,203 @@
+from __future__ import annotations
+
+import json
+import os
+import unittest
+from unittest.mock import Mock, patch
+
+import httpx
+from fastapi.testclient import TestClient
+from pydantic import ValidationError
+
+from contractor_match.api import app
+from contractor_match.catalogue import load_catalogue
+from contractor_match.explanations import generate_explanations
+from contractor_match.models import RecommendationRequest
+from contractor_match.ranking import quote_candidates
+from contractor_match.service import recommend
+
+
+def request(**changes: object) -> RecommendationRequest:
+    fields: dict[str, object] = {
+        "city": "Алматы",
+        "date": "2026-10-15",
+        "event_format": "корпоратив",
+        "category": "Ведущий",
+        "budget_kzt": 1_200_000,
+        "brief": "спокойный ведущий делового форума",
+    }
+    fields.update(changes)
+    return RecommendationRequest(**fields)
+
+
+class RecommendationTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.no_key = patch.dict(
+            os.environ,
+            {"OPENAI_API_KEY": "", "NVIDIA_API_KEY": "", "AI_PROVIDER": "openai"},
+        )
+        self.no_key.start()
+        self.addCleanup(self.no_key.stop)
+
+    def test_catalogue_and_date_change(self) -> None:
+        catalogue = load_catalogue()
+        self.assertEqual(len(catalogue), 66)
+        self.assertEqual(sum(p.synthetic for p in catalogue), 13)
+        autumn = recommend(request())
+        december = recommend(request(date="2026-12-19"))
+        self.assertEqual(autumn.status, "matched")
+        self.assertEqual(len(autumn.cards), 3)
+        self.assertEqual(len(december.cards), 1)
+        self.assertNotEqual(
+            [card.id for card in autumn.cards], [card.id for card in december.cards]
+        )
+        by_id = {profile.id: profile for profile in catalogue}
+        for day, response in ((request().date, autumn), (request(date="2026-12-19").date, december)):
+            for card in response.cards:
+                self.assertNotIn(day, by_id[card.id].busy_dates)
+                self.assertIn(card.evidence_quote, by_id[card.id].description)
+                self.assertEqual(card.synthetic, by_id[card.id].synthetic)
+        self.assertIn("Меньше трёх", december.message)
+        self.assertGreater(december.reasons["busy"], 0)
+
+    def test_three_outcomes_and_reasons(self) -> None:
+        rare = recommend(request(category="Флорист", budget_kzt=300_000))
+        self.assertEqual(rare.status, "matched")
+        self.assertEqual(len(rare.cards), 1)
+        self.assertIn("Меньше трёх", rare.message)
+
+        absent = recommend(request(city="Астана", category="Декоратор"))
+        self.assertEqual(absent.status, "category_absent")
+        self.assertEqual(absent.cards, [])
+        self.assertIn("нет подрядчиков", absent.message)
+
+        rejected = recommend(
+            request(city="Астана", category="Флорист", budget_kzt=100_000)
+        )
+        self.assertEqual(rejected.status, "no_eligible")
+        self.assertEqual(rejected.cards, [])
+        self.assertEqual(rejected.reasons["busy"], 1)
+        self.assertEqual(rejected.reasons["over_budget"], 1)
+
+    def test_determinism_and_optional_filters(self) -> None:
+        item = request()
+        first = recommend(item)
+        second = recommend(item)
+        self.assertEqual(
+            [card.id for card in first.cards], [card.id for card in second.cards]
+        )
+        self.assertEqual(first.ai_mode, "fallback")
+        long_event = recommend(request(duration_hours=24))
+        self.assertEqual(long_event.status, "no_eligible")
+        self.assertGreater(long_event.reasons["too_short"], 0)
+        english = recommend(request(language="английский"))
+        self.assertTrue(english.cards)
+        by_id = {profile.id: profile for profile in load_catalogue()}
+        self.assertTrue(all("английский" in by_id[c.id].languages for c in english.cards))
+
+    def test_venue_uses_same_calendar_and_duration(self) -> None:
+        hall = request(category="Банкетный зал", budget_kzt=5_000_000)
+        available = recommend(hall)
+        self.assertEqual(available.status, "matched")
+        self.assertEqual(len(available.cards), 3)
+        self.assertTrue(
+            all(hall.date not in p.busy_dates for p in load_catalogue() if p.id in {c.id for c in available.cards})
+        )
+        nine_hours = recommend(
+            request(category="Банкетный зал", budget_kzt=5_000_000, duration_hours=9)
+        )
+        self.assertEqual(nine_hours.status, "no_eligible")
+        self.assertGreater(nine_hours.reasons["too_short"], 0)
+
+    def test_invalid_input(self) -> None:
+        for changes in (
+            {"date": "2027-01-01"},
+            {"date": "2026-02-30"},
+            {"budget_kzt": 0},
+            {"duration_hours": -1},
+            {"event_format": "фестиваль"},
+        ):
+            with self.subTest(changes=changes), self.assertRaises(ValidationError):
+                request(**changes)
+
+    def test_ai_quotes_are_checked_and_fallback_is_safe(self) -> None:
+        item = request()
+        profiles = list(load_catalogue()[:2])
+        quotes = [quote_candidates(profile)[0] for profile in profiles]
+        items = [
+            {"id": profile.id, "quote": quote}
+            for profile, quote in zip(profiles, quotes)
+        ]
+        valid_response = Mock()
+        valid_response.raise_for_status.return_value = None
+        valid_response.json.return_value = {
+            "output": [
+                {"type": "message", "content": [{"type": "output_text", "text": json.dumps({"items": items})}]}
+            ]
+        }
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}), patch(
+            "contractor_match.explanations.httpx.post", return_value=valid_response
+        ) as post:
+            explained = generate_explanations(item, profiles)
+        self.assertEqual(explained.mode, "openai")
+        self.assertEqual(explained.quotes[profiles[0].id], quotes[0])
+        self.assertEqual(post.call_count, 1)
+
+        bad_response = Mock()
+        bad_response.raise_for_status.return_value = None
+        bad_response.json.return_value = {
+            "output": [
+                {"type": "message", "content": [{"type": "output_text", "text": json.dumps({"items": [items[0], {"id": profiles[1].id, "quote": "выдуманный опыт"}]})}]}
+            ]
+        }
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}), patch(
+            "contractor_match.explanations.httpx.post", return_value=bad_response
+        ):
+            explained = generate_explanations(item, profiles)
+        self.assertEqual(explained.mode, "fallback")
+        self.assertIn(explained.quotes[profiles[1].id], profiles[1].description)
+
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}), patch(
+            "contractor_match.explanations.httpx.post",
+            side_effect=httpx.TimeoutException("slow"),
+        ):
+            self.assertEqual(generate_explanations(item, profiles).mode, "fallback")
+
+    def test_nvidia_adapter_uses_one_call(self) -> None:
+        item = request()
+        profiles = list(load_catalogue()[:2])
+        items = [
+            {"id": profile.id, "quote": quote_candidates(profile)[0]}
+            for profile in profiles
+        ]
+        api_response = Mock()
+        api_response.raise_for_status.return_value = None
+        api_response.json.return_value = {
+            "choices": [{"message": {"content": json.dumps({"items": items})}}]
+        }
+        with patch.dict(
+            os.environ, {"AI_PROVIDER": "nvidia", "NVIDIA_API_KEY": "test-key"}
+        ), patch(
+            "contractor_match.explanations.httpx.post", return_value=api_response
+        ) as post:
+            explained = generate_explanations(item, profiles)
+        self.assertEqual(explained.mode, "nvidia")
+        self.assertEqual(post.call_count, 1)
+        self.assertIn("integrate.api.nvidia.com", post.call_args.args[0])
+
+    def test_api_contract(self) -> None:
+        client = TestClient(app)
+        response = client.post("/recommendations", json=request().model_dump(mode="json"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["status"], "matched")
+        self.assertEqual(len(response.json()["cards"]), 3)
+        wrong_date = request().model_dump(mode="json")
+        wrong_date["date"] = "2027-01-01"
+        self.assertEqual(client.post("/recommendations", json=wrong_date).status_code, 422)
+        wrong_city = request(city="Алматы").model_dump(mode="json")
+        wrong_city["city"] = "Караганда"
+        self.assertEqual(client.post("/recommendations", json=wrong_city).status_code, 422)
+
+
+if __name__ == "__main__":
+    unittest.main()
