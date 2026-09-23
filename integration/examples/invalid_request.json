@@ -1,0 +1,22 @@
+{
+  "request": {
+    "city": "Алматы",
+    "date": "2026-10-15",
+    "event_format": "корпоратив",
+    "category": "Ведущий",
+    "budget_kzt": "1200000"
+  },
+  "http_status": 422,
+  "response": {
+    "error": {
+      "code": "invalid_request",
+      "message": "Проверьте параметры запроса.",
+      "details": [
+        {
+          "field": "budget_kzt",
+          "message": "Укажите целое число."
+        }
+      ]
+    }
+  }
+}

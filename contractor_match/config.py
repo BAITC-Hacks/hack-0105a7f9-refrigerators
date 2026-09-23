@@ -9,6 +9,33 @@ class ConfigurationError(RuntimeError):
     """Safe configuration error: never includes environment values or keys."""
 
 
+def load_cors_origins() -> list[str]:
+    defaults = ",".join(f"http://{host}:{port}" for host in ("localhost", "127.0.0.1")
+                        for port in (3000, 4317, 5173))
+    raw = os.getenv("CORS_ALLOWED_ORIGINS", defaults)
+    origins = []
+    for value in raw.split(","):
+        value = value.strip()
+        if not value:
+            continue
+        try:
+            parsed = urlsplit(value)
+            valid = (parsed.scheme in {"http", "https"} and parsed.hostname
+                     and not parsed.username and not parsed.password and not parsed.query
+                     and not parsed.fragment and parsed.path in {"", "/"} and parsed.port != 0)
+        except ValueError:
+            valid = False
+        if not valid or "*" in value:
+            raise ConfigurationError("CORS_ALLOWED_ORIGINS: перечислите точные HTTP(S) origins без путей и ключей.")
+        # Match browser serialization: lowercase host and no default port.
+        host = f"[{parsed.hostname}]" if ":" in parsed.hostname else parsed.hostname
+        port = f":{parsed.port}" if parsed.port and parsed.port != {"http": 80, "https": 443}[parsed.scheme] else ""
+        origin = f"{parsed.scheme}://{host}{port}"
+        if origin not in origins:
+            origins.append(origin)
+    return origins
+
+
 @dataclass(frozen=True)
 class AISettings:
     requested_provider: str

@@ -1,0 +1,74 @@
+{
+  "request": {
+    "city": "Астана",
+    "date": "2026-10-15",
+    "event_format": "корпоратив",
+    "category": "Флорист",
+    "budget_kzt": 100000
+  },
+  "http_status": 200,
+  "response": {
+    "status": "no_eligible",
+    "message": "В городе Астана есть 1 профилей категории «Флорист», но ни один не подходит. Причины: заняты на дату: 1; стартовая цена выше бюджета: 1. Причины могут пересекаться.",
+    "cards": [],
+    "reasons": {
+      "busy": 1,
+      "over_budget": 1,
+      "wrong_format": 0,
+      "wrong_language": 0,
+      "too_short": 0
+    },
+    "ai_mode": "not_used",
+    "ai_reason": "not_needed",
+    "counts": {
+      "category_total": 1,
+      "eligible_total": 0,
+      "returned_total": 0,
+      "excluded_total": 1
+    },
+    "understanding": {
+      "method": "local_rules",
+      "styles": [],
+      "unwanted": [],
+      "languages": [],
+      "effective_language": null,
+      "language_source": "unspecified",
+      "notes": []
+    },
+    "alternatives": [
+      {
+        "changes": [
+          {
+            "field": "date",
+            "from_value": "2026-10-15",
+            "to_value": "2026-10-16"
+          },
+          {
+            "field": "budget_kzt",
+            "from_value": 100000,
+            "to_value": 300000
+          }
+        ],
+        "request": {
+          "city": "Астана",
+          "date": "2026-10-16",
+          "event_format": "корпоратив",
+          "category": "Флорист",
+          "budget_kzt": 300000,
+          "duration_hours": null,
+          "language": null,
+          "brief": null
+        },
+        "eligible_count": 1,
+        "added_count": 1,
+        "candidate_ids": [
+          "HK-90002"
+        ],
+        "message": "Изменить условий: 2 — дата 16.10.2026; бюджет 300 000 ₸: подходят 1 (сейчас 0). Проверено по календарю и стартовым ценам каталога; остальные условия сохранены."
+      }
+    ],
+    "alternatives_note": "Одного изменения недостаточно. Показаны проверенные сочетания с минимальным числом изменённых полей; затем приоритет ближайшей даты, бюджета и часов. Это разные компромиссы, а не единственный лучший вариант.",
+    "ranking_mode": "not_used",
+    "ranking_reason": "not_needed"
+  }
+}

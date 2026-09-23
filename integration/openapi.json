@@ -1,0 +1,753 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Умный подбор event-подрядчиков",
+    "description": "До трёх проверяемых рекомендаций из каталога HackAlem AI.",
+    "version": "0.2.0"
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "Health",
+        "operationId": "getHealth",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/catalogue/options": {
+      "get": {
+        "summary": "Options",
+        "operationId": "getCatalogueOptions",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogueOptions"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/recommendations": {
+      "post": {
+        "summary": "Recommendations",
+        "operationId": "recommend",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecommendationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecommendationResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Alternative": {
+        "properties": {
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/ConditionChange"
+            },
+            "type": "array",
+            "title": "Changes"
+          },
+          "request": {
+            "$ref": "#/components/schemas/RecommendationRequest"
+          },
+          "eligible_count": {
+            "type": "integer",
+            "title": "Eligible Count"
+          },
+          "added_count": {
+            "type": "integer",
+            "title": "Added Count"
+          },
+          "candidate_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Candidate Ids"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "changes",
+          "request",
+          "eligible_count",
+          "added_count",
+          "candidate_ids",
+          "message"
+        ],
+        "title": "Alternative"
+      },
+      "ApiError": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "enum": [
+              "invalid_request",
+              "service_misconfigured",
+              "internal_error",
+              "not_found",
+              "method_not_allowed",
+              "http_error"
+            ],
+            "title": "Code",
+            "default": "invalid_request"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "default": "Проверьте параметры запроса."
+          },
+          "details": {
+            "items": {
+              "$ref": "#/components/schemas/InputIssue"
+            },
+            "type": "array",
+            "title": "Details"
+          }
+        },
+        "type": "object",
+        "required": [
+          "details"
+        ],
+        "title": "ApiError"
+      },
+      "BriefUnderstanding": {
+        "properties": {
+          "method": {
+            "type": "string",
+            "const": "local_rules",
+            "title": "Method",
+            "default": "local_rules"
+          },
+          "styles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Styles"
+          },
+          "unwanted": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Unwanted"
+          },
+          "languages": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "русский",
+                "казахский",
+                "английский"
+              ]
+            },
+            "type": "array",
+            "title": "Languages"
+          },
+          "effective_language": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "русский",
+                  "казахский",
+                  "английский"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective Language"
+          },
+          "language_source": {
+            "type": "string",
+            "enum": [
+              "field",
+              "brief",
+              "unspecified"
+            ],
+            "title": "Language Source",
+            "default": "unspecified"
+          },
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Notes"
+          }
+        },
+        "type": "object",
+        "title": "BriefUnderstanding"
+      },
+      "Card": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "category": {
+            "type": "string",
+            "title": "Category"
+          },
+          "city": {
+            "type": "string",
+            "title": "City"
+          },
+          "price_from_kzt": {
+            "type": "integer",
+            "title": "Price From Kzt"
+          },
+          "synthetic": {
+            "type": "boolean",
+            "title": "Synthetic"
+          },
+          "city_imputed": {
+            "type": "boolean",
+            "title": "City Imputed"
+          },
+          "price_imputed": {
+            "type": "boolean",
+            "title": "Price Imputed"
+          },
+          "explanation": {
+            "type": "string",
+            "title": "Explanation"
+          },
+          "evidence_quote": {
+            "type": "string",
+            "title": "Evidence Quote"
+          },
+          "evidence_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence Note"
+          },
+          "why_fits": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Why Fits"
+          },
+          "to_clarify": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "To Clarify"
+          },
+          "differences": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Differences"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "category",
+          "city",
+          "price_from_kzt",
+          "synthetic",
+          "city_imputed",
+          "price_imputed",
+          "explanation",
+          "evidence_quote"
+        ],
+        "title": "Card"
+      },
+      "CatalogueOptions": {
+        "properties": {
+          "cities": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Cities"
+          },
+          "categories_by_city": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "type": "object",
+            "title": "Categories By City"
+          },
+          "event_formats": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Event Formats"
+          },
+          "languages": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Languages"
+          },
+          "calendar_start": {
+            "type": "string",
+            "format": "date",
+            "title": "Calendar Start"
+          },
+          "calendar_end": {
+            "type": "string",
+            "format": "date",
+            "title": "Calendar End"
+          }
+        },
+        "type": "object",
+        "required": [
+          "cities",
+          "categories_by_city",
+          "event_formats",
+          "languages",
+          "calendar_start",
+          "calendar_end"
+        ],
+        "title": "CatalogueOptions"
+      },
+      "ConditionChange": {
+        "properties": {
+          "field": {
+            "type": "string",
+            "enum": [
+              "date",
+              "budget_kzt",
+              "duration_hours"
+            ],
+            "title": "Field"
+          },
+          "from_value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "title": "From Value"
+          },
+          "to_value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "title": "To Value"
+          }
+        },
+        "type": "object",
+        "required": [
+          "field",
+          "from_value",
+          "to_value"
+        ],
+        "title": "ConditionChange"
+      },
+      "ErrorResponse": {
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ApiError"
+          }
+        },
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "title": "ErrorResponse"
+      },
+      "HealthResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "const": "ok",
+            "title": "Status",
+            "default": "ok"
+          }
+        },
+        "type": "object",
+        "title": "HealthResponse"
+      },
+      "InputIssue": {
+        "properties": {
+          "field": {
+            "type": "string",
+            "title": "Field"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "field",
+          "message"
+        ],
+        "title": "InputIssue"
+      },
+      "RecommendationRequest": {
+        "properties": {
+          "city": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "City"
+          },
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date"
+          },
+          "event_format": {
+            "type": "string",
+            "enum": [
+              "свадьба",
+              "той",
+              "корпоратив",
+              "конференция",
+              "юбилей",
+              "день рождения"
+            ],
+            "title": "Event Format"
+          },
+          "category": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Category"
+          },
+          "budget_kzt": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Budget Kzt"
+          },
+          "duration_hours": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Hours"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "русский",
+                  "казахский",
+                  "английский"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          },
+          "brief": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Brief"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "city",
+          "date",
+          "event_format",
+          "category",
+          "budget_kzt"
+        ],
+        "title": "RecommendationRequest"
+      },
+      "RecommendationResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "matched",
+              "category_absent",
+              "no_eligible"
+            ],
+            "title": "Status"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "cards": {
+            "items": {
+              "$ref": "#/components/schemas/Card"
+            },
+            "type": "array",
+            "title": "Cards"
+          },
+          "reasons": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Reasons"
+          },
+          "ai_mode": {
+            "type": "string",
+            "enum": [
+              "openai",
+              "nvidia",
+              "brev",
+              "fallback",
+              "not_used"
+            ],
+            "title": "Ai Mode"
+          },
+          "ai_reason": {
+            "type": "string",
+            "enum": [
+              "success",
+              "not_needed",
+              "local_requested",
+              "missing_key",
+              "timeout",
+              "auth_error",
+              "rate_limited",
+              "network_error",
+              "provider_error",
+              "invalid_response",
+              "invalid_evidence"
+            ],
+            "title": "Ai Reason",
+            "default": "not_needed"
+          },
+          "counts": {
+            "$ref": "#/components/schemas/SelectionCounts"
+          },
+          "understanding": {
+            "$ref": "#/components/schemas/BriefUnderstanding"
+          },
+          "alternatives": {
+            "items": {
+              "$ref": "#/components/schemas/Alternative"
+            },
+            "type": "array",
+            "title": "Alternatives"
+          },
+          "alternatives_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Alternatives Note"
+          },
+          "ranking_mode": {
+            "type": "string",
+            "enum": [
+              "tfidf",
+              "brev",
+              "not_used"
+            ],
+            "title": "Ranking Mode",
+            "default": "not_used"
+          },
+          "ranking_reason": {
+            "type": "string",
+            "title": "Ranking Reason",
+            "default": "not_needed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "message",
+          "cards",
+          "reasons",
+          "ai_mode"
+        ],
+        "title": "RecommendationResponse"
+      },
+      "SelectionCounts": {
+        "properties": {
+          "category_total": {
+            "type": "integer",
+            "title": "Category Total",
+            "default": 0
+          },
+          "eligible_total": {
+            "type": "integer",
+            "title": "Eligible Total",
+            "default": 0
+          },
+          "returned_total": {
+            "type": "integer",
+            "title": "Returned Total",
+            "default": 0
+          },
+          "excluded_total": {
+            "type": "integer",
+            "title": "Excluded Total",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "title": "SelectionCounts"
+      }
+    }
+  }
+}

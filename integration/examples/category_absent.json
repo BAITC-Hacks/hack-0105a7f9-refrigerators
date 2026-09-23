@@ -1,0 +1,37 @@
+{
+  "request": {
+    "city": "Астана",
+    "date": "2026-10-15",
+    "event_format": "корпоратив",
+    "category": "Декоратор",
+    "budget_kzt": 1200000
+  },
+  "http_status": 200,
+  "response": {
+    "status": "category_absent",
+    "message": "В городе Астана нет подрядчиков категории «Декоратор».",
+    "cards": [],
+    "reasons": {},
+    "ai_mode": "not_used",
+    "ai_reason": "not_needed",
+    "counts": {
+      "category_total": 0,
+      "eligible_total": 0,
+      "returned_total": 0,
+      "excluded_total": 0
+    },
+    "understanding": {
+      "method": "local_rules",
+      "styles": [],
+      "unwanted": [],
+      "languages": [],
+      "effective_language": null,
+      "language_source": "unspecified",
+      "notes": []
+    },
+    "alternatives": [],
+    "alternatives_note": "Смена даты, бюджета или длительности не создаст отсутствующую в городе категорию.",
+    "ranking_mode": "not_used",
+    "ranking_reason": "not_needed"
+  }
+}
