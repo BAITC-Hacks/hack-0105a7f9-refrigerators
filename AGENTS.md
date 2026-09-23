@@ -12,6 +12,8 @@
 ## Источники истины и границы ответственности
 
 - Факты о подрядчиках: `data/contractors.csv`. В рабочем каталоге 66 профилей, включая 13 synthetic. Не добавляйте выдуманные профили, контакты, отзывы, фотографии подрядчиков или тарифы.
+- Публичный запуск: app.py, vercel.json, docs/DEPLOYMENT.md. run_web.py использует тот же app. В production CATALOGUE_PROVIDER=supabase; supabase_catalogue.py сверяет снимок базы с исходным CSV. Не подменять недоступную базу локальным каталогом молча. Не менять фиксированные профили через UI базы.
+- requirements.txt и requirements-lock.txt должны содержать одинаковые версии; Vercel требует плоский список. После изменения зависимостей проверить оба файла, тесты и контракт.
 - Схемы: `contractor_match/models.py`; HTTP-маршруты: `contractor_match/api.py`.
 - Общая логика: `service.py`; жёсткие условия: `eligibility.py`; проверенные изменения запроса: `alternatives.py`.
 - Ранжирование: `ranking.py`, опциональный NIM: `nim.py`. Объяснения и проверка цитат: `explanations.py`. Разбор пожеланий и сравнение: `preferences.py`.
