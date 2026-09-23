@@ -7,6 +7,7 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
+from time import perf_counter
 from unittest.mock import AsyncMock, Mock, patch
 
 import httpx
@@ -64,6 +65,30 @@ class RecommendationTests(unittest.TestCase):
                 self.assertEqual(card.synthetic, by_id[card.id].synthetic)
         self.assertIn("Меньше трёх", december.message)
         self.assertGreater(december.reasons["busy"], 0)
+        self.assertIn(f"заняты: {autumn.reasons['busy']}", autumn.message)
+        self.assertIn(f"заняты: {december.reasons['busy']}", december.message)
+        self.assertIn("19.12.2026", december.message)
+
+    def test_live_demo_evidence_and_response_time(self) -> None:
+        started = perf_counter()
+        dense = recommend(request())
+        elapsed = perf_counter() - started
+        self.assertLess(elapsed, 10, "Демо-запрос должен укладываться в ориентир задачи")
+        self.assertEqual(len(dense.cards), 3)
+        self.assertEqual(len({card.evidence_quote for card in dense.cards}), 3)
+        evidence = {card.id: card.evidence_quote for card in dense.cards}
+        self.assertIn("бизнес форумы", evidence["HK-44733"])
+        self.assertIn("конференции", evidence["HK-35215"])
+        self.assertIn("интеллигентный юмор", evidence["HK-44923"])
+        self.assertTrue(all("стартовая цена" in card.explanation for card in dense.cards))
+        self.assertTrue(all("По календарю каталога" in card.explanation for card in dense.cards))
+
+        rare = recommend(request(category="Флорист", budget_kzt=300_000))
+        empty = recommend(request(city="Астана", category="Флорист", budget_kzt=100_000))
+        self.assertEqual(len(rare.cards), 1)
+        self.assertIn("Меньше трёх", rare.message)
+        self.assertEqual(empty.status, "no_eligible")
+        self.assertIn("Причины:", empty.message)
 
     def test_three_outcomes_and_reasons(self) -> None:
         rare = recommend(request(category="Флорист", budget_kzt=300_000))

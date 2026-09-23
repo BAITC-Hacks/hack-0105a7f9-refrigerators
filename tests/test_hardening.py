@@ -192,7 +192,7 @@ class HardeningTests(unittest.TestCase):
         result = generate_explanations(request(), profiles)
         validate_quotes(result.quotes, profiles, request())
         self.assertTrue(all("уникальное отличие не подтверждено" in note for note in result.notes.values()))
-        with patch("contractor_match.explanations.evidence_options", return_value=["Выдуманный фрагмент описания"]):
+        with patch("contractor_match.explanations.local_quotes", return_value={p.id: "Выдуманный фрагмент описания" for p in profiles}):
             with self.assertRaises(InvalidEvidence):
                 generate_explanations(request(), profiles)
         tiny = profile(description="Опыт. Стиль.")
@@ -205,7 +205,7 @@ class HardeningTests(unittest.TestCase):
         with fixture_catalogue([candidate]):
             card = recommend(item).cards[0]
         self.assertIn("пожелание с отрицанием требует уточнения", card.explanation)
-        self.assertIn("По календарю датасета", card.explanation)
+        self.assertIn("По календарю каталога", card.explanation)
         self.assertIn("цена оценочная", card.explanation)
         self.assertIn("город восстановлен", card.explanation)
         self.assertEqual(card.evidence_quote, candidate.description)

@@ -11,7 +11,7 @@ import httpx
 from .catalogue import Profile
 from .config import AISettings, load_settings
 from .models import AiMode, AiReason, RecommendationRequest
-from .ranking import evidence_options, has_negative_brief, quote_candidates
+from .ranking import evidence_options, has_negative_brief, local_quotes, quote_candidates
 
 
 TIMEOUT_SECONDS = 6.0
@@ -22,6 +22,8 @@ SYSTEM_PROMPT = (
     "Для каждого переданного id выбери ровно одну строку из его allowed_quotes, "
     "полезную для оценки формата и пожелания заказчика. Не утверждай, что пожелание "
     "выполнено; особенно не путай отрицание с совпадением слов. "
+    "Предпочитай конкретный опыт, стиль или услугу, отличающие этого подрядчика "
+    "от остальных; избегай общих характеристик, если есть более предметный фрагмент. "
     "Скопируй строку без изменений, не выдумывай сведения и не добавляй других id. "
     'Ответь только JSON-объектом вида {"items":[{"id":"...","quote":"..."}]}.'
 )
@@ -214,10 +216,7 @@ def _notes(
 def _local_result(
     request: RecommendationRequest, profiles: list[Profile], reason: AiReason
 ) -> ExplanationResult:
-    quotes: dict[str, str] = {}
-    for profile in profiles:
-        options = evidence_options(profile, request)
-        quotes[profile.id] = next((q for q in options if q not in quotes.values()), options[0])
+    quotes = local_quotes(profiles, request)
     validate_quotes(quotes, profiles, request)
     return ExplanationResult(quotes, "fallback", reason, _notes(request, quotes))
 

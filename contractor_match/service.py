@@ -88,8 +88,8 @@ def _card_explanation(
     date_text = request.date.strftime("%d.%m.%Y")
     price = f"{profile.price_from_kzt:,}".replace(",", " ")
     first = (
-        f"По календарю датасета свободен {date_text}, работает с форматом «{request.event_format}»; "
-        f"стартовая цена {price} ₸ укладывается в бюджет"
+        f"По календарю каталога доступен {date_text} и берёт формат «{request.event_format}»; "
+        f"стартовая цена от {price} ₸ укладывается в бюджет"
     )
     if request.language:
         first += f", работает на языке «{request.language}»"
@@ -179,10 +179,13 @@ def recommend(request: RecommendationRequest) -> RecommendationResponse:
         for profile in selected
     ]
     message = f"Подобрано подрядчиков: {len(cards)}."
+    if reasons["busy"]:
+        message += f" На {request.date.strftime('%d.%m.%Y')} заняты: {reasons['busy']}."
     if len(cards) < 3:
         message += f" Меньше трёх: из {len(category_profiles)} профилей категории подходят {len(eligible)}"
-        if _reason_text(reasons):
-            message += f"; не подошли по условиям: {_reason_text(reasons)}"
+        other_reasons = {key: count for key, count in reasons.items() if key != "busy"}
+        if _reason_text(other_reasons):
+            message += f"; не подошли по другим условиям: {_reason_text(other_reasons)}"
         message += ". Причины могут пересекаться."
     elif len(eligible) > 3:
         message += f" Всего подходят {len(eligible)}; показаны первые три по ранжированию."

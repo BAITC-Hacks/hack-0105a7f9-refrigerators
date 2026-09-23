@@ -137,5 +137,14 @@ def evidence_options(profile: Profile, request: RecommendationRequest) -> list[s
     return [excerpts[index] for index in ordered[:3]]
 
 
+def local_quotes(profiles: list[Profile], request: RecommendationRequest) -> dict[str, str]:
+    """Pick distinct evidence across cards from the same shortlist used by AI."""
+    quotes: dict[str, str] = {}
+    for profile in profiles:
+        options = evidence_options(profile, request)
+        quotes[profile.id] = next((q for q in options if q not in quotes.values()), options[0])
+    return quotes
+
+
 def local_quote(profile: Profile, request: RecommendationRequest) -> str:
-    return evidence_options(profile, request)[0]
+    return local_quotes([profile], request)[profile.id]
