@@ -40,6 +40,8 @@ $env:OPENAI_API_KEY = '<ваш ключ>'
 
 Список переменных есть в `.env.example`. Файл служит образцом; приложение читает **переменные окружения**, а не `.env`. Не добавляйте реальные ключи в репозиторий. Для проверки запасного режима без сети задайте `AI_PROVIDER=local` либо не задавайте ключ. В ответе поле `ai_mode` показывает `openai`, `nvidia`, `fallback` либо `not_used`, когда карточек нет.
 
+Ключи NVIDIA Brev (`bak-…`) и идентификаторы организации (`org-…`) не подходят для `NVIDIA_API_KEY`: они относятся к управлению ресурсами Brev. Для используемого здесь endpoint NVIDIA Build нужен отдельный ключ `nvapi-…`, созданный в [настройках Build](https://build.nvidia.com/settings/api-keys). См. [разделение ключей в документации Brev](https://docs.nvidia.com/brev/guides/api-keys).
+
 OpenAI вызывается через [Responses API со структурированным выводом](https://developers.openai.com/api/docs/guides/structured-outputs), NVIDIA — через [совместимый Chat Completions endpoint](https://build.nvidia.com/mistralai/mistral-nemotron). Модели можно заменить переменными `OPENAI_MODEL` и `NVIDIA_MODEL`.
 
 ## Контракт
