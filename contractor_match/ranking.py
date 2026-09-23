@@ -92,8 +92,7 @@ def quote_candidates(profile: Profile) -> list[str]:
     return list(dict.fromkeys(excerpt for excerpt in excerpts if excerpt))
 
 
-def local_quote(profile: Profile, request: RecommendationRequest) -> str:
-    excerpts = quote_candidates(profile)
+def _evidence_query(request: RecommendationRequest) -> str:
     query = _query(request)
     if request.brief:
         hints = {
@@ -106,5 +105,27 @@ def local_quote(profile: Profile, request: RecommendationRequest) -> str:
         for stem, related_words in hints.items():
             if stem in request.brief.casefold():
                 query += f" {related_words}"
-    scores = DescriptionIndex(excerpts).similarities(query)
-    return excerpts[max(range(len(excerpts)), key=lambda index: (scores[index], -index))]
+    return query
+
+
+def local_quotes(profiles: list[Profile], request: RecommendationRequest) -> dict[str, str]:
+    """Pick relevant, distinct evidence across the cards shown together."""
+    excerpts_by_profile = {profile.id: quote_candidates(profile) for profile in profiles}
+    all_excerpts = [quote for quotes in excerpts_by_profile.values() for quote in quotes]
+    scores = DescriptionIndex(all_excerpts).similarities(_evidence_query(request))
+    score_by_quote = dict(zip(all_excerpts, scores))
+    used: set[str] = set()
+    result: dict[str, str] = {}
+    for profile in profiles:
+        ranked = sorted(
+            enumerate(excerpts_by_profile[profile.id]),
+            key=lambda pair: (-score_by_quote[pair[1]], pair[0]),
+        )
+        quote = next((text for _, text in ranked if text not in used), ranked[0][1])
+        result[profile.id] = quote
+        used.add(quote)
+    return result
+
+
+def local_quote(profile: Profile, request: RecommendationRequest) -> str:
+    return local_quotes([profile], request)[profile.id]
