@@ -10,7 +10,7 @@ import httpx
 
 from .catalogue import Profile
 from .models import RecommendationRequest
-from .ranking import local_quote, quote_candidates
+from .ranking import local_quotes, quote_candidates
 
 
 TIMEOUT_SECONDS = 6.0
@@ -18,6 +18,8 @@ SYSTEM_PROMPT = (
     "Ты помогаешь подобрать event-подрядчиков. Для каждого переданного id выбери "
     "ровно одну строку из его списка allowed_quotes, которая лучше всего "
     "объясняет соответствие формату мероприятия и пожеланию заказчика. "
+    "Предпочитай конкретный опыт, стиль или услугу, отличающие этого подрядчика "
+    "от остальных; избегай общих характеристик, если есть более предметный фрагмент. "
     "Скопируй строку без изменений, не выдумывай сведения и не добавляй других id. "
     "Ответь только JSON-объектом вида {\"items\":[{\"id\":\"...\",\"quote\":\"...\"}]}.")
 
@@ -168,6 +170,6 @@ def generate_explanations(
         except (TimeoutError, httpx.HTTPError, ValueError, KeyError, TypeError, IndexError):
             pass
     return ExplanationResult(
-        {profile.id: local_quote(profile, request) for profile in profiles},
+        local_quotes(profiles, request),
         "fallback",
     )
