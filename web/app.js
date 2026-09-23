@@ -1,10 +1,7 @@
 import {ApiClientError, buildRecommendationRequest, createApiClient, createLatestRecommender} from '../integration/api-client.mjs';
 
-// Public deployment and `uvicorn app:app` use one origin. Preserve the documented
-// two-server local workflow on the static development server's port.
-const separateDevServer = ['localhost', '127.0.0.1'].includes(location.hostname)
-  && location.port === '5173';
-const baseUrl = globalThis.EVENT_API_BASE_URL ?? (separateDevServer ? 'http://127.0.0.1:8000' : '');
+// Public deployment and run_web.py serve the API on the same origin.
+const baseUrl = globalThis.EVENT_API_BASE_URL ?? globalThis.location.origin;
 const api = createApiClient({baseUrl});
 const latest = createLatestRecommender(api);
 const form = document.getElementById('event-form');
@@ -384,3 +381,4 @@ window.addEventListener('pagehide', () => latest.cancel());
 
 alternativesPanel.append(waiting('Запасные пути появятся здесь', 'После подбора покажем соседние условия и то, что нужно уточнить по пожеланиям.'));
 loadOptions();
+

@@ -9,7 +9,8 @@
 
 Vercel поддерживает FastAPI и Python 3.14: [FastAPI](https://vercel.com/docs/frameworks/backend/fastapi),
 [Python runtime](https://vercel.com/docs/functions/runtimes/python).
-Зависимости из requirements.txt ограничены проверенными версиями requirements-lock.txt.
+requirements.txt и requirements-lock.txt содержат одинаковые проверенные версии.
+Плоский список нужен сборщику Vercel; при обновлении синхронизировать оба файла.
 `app.py` обслуживает `/web/`, единственный JS-клиент и прежние API-маршруты.
 Корень перенаправляет на `/web/`. Исходники backend, `.env` и CSV не раздаются как файлы сайта.
 
@@ -25,7 +26,8 @@ python -m uvicorn app:app --host 127.0.0.1 --port 8000 --no-access-log
 ```
 
 Открыть `http://127.0.0.1:8000/`. На публичном домене клиент использует тот же
-origin. Прежний локальный `http.server 5173` по-прежнему обращается к API на 8000.
+origin. Локальный запуск команды `python run_web.py` использует то же приложение.
+Для двух отдельных серверов явно установить `window.EVENT_API_BASE_URL` перед app.js.
 
 ## Supabase: новая база, без пользовательских аккаунтов
 
