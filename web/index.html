@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f7f6f2">
+  <meta name="description" content="Подбор event-подрядчиков по дате, бюджету и пожеланиям с проверяемыми причинами выбора.">
+  <title>рядом. — Подбор людей для вашего события</title>
+  <link rel="stylesheet" href="./styles.css">
+  <script type="module" src="./app.js"></script>
+</head>
+<body>
+  <div class="page-shell">
+    <header class="site-header">
+      <a class="brand" href="#top" aria-label="рядом. — на главную">
+        <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+        <span>рядом<span class="brand-period">.</span></span>
+      </a>
+      <nav class="header-nav" aria-label="Основная навигация">
+        <a href="#selection">Подбор</a>
+        <a href="#how-it-works">Как это работает</a>
+      </nav>
+      <span class="header-note">События начинаются с людей</span>
+    </header>
+
+    <main id="top">
+      <section class="intro" aria-labelledby="intro-title">
+        <div class="intro-copy">
+          <div class="eyebrow"><span class="eyebrow-dash"></span> Умный подбор для событий</div>
+          <h1 id="intro-title">Найдём людей, с которыми <em>всё получится.</em></h1>
+          <p>Расскажите о событии. Мы покажем до трёх подрядчиков из каталога и объясним выбор конкретными фактами.</p>
+          <a class="intro-link" href="#selection">Собрать свой запрос <span aria-hidden="true">↗</span></a>
+        </div>
+        <div class="ticket-stage" aria-label="Карточка вашего события">
+          <span class="stage-circle stage-circle-yellow" aria-hidden="true"></span>
+          <span class="stage-circle stage-circle-blue" aria-hidden="true"></span>
+          <span class="stage-star stage-star-one" aria-hidden="true">✳</span>
+          <span class="stage-star stage-star-two" aria-hidden="true">✳</span>
+          <div class="event-ticket">
+            <div class="ticket-top"><span>ВАШЕ СОБЫТИЕ</span><span class="ticket-dots" aria-hidden="true">● ● ●</span></div>
+            <div class="ticket-date" id="ticket-date">—</div>
+            <div class="ticket-divider"></div>
+            <div class="ticket-bottom"><span id="ticket-city">Выберите город</span><span id="ticket-year">2026</span></div>
+            <div class="ticket-format" id="ticket-format">Формат события</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="selection" id="selection" aria-labelledby="selection-title">
+        <div class="section-heading">
+          <div><div class="eyebrow"><span class="eyebrow-dash"></span> Подбор подрядчиков</div><h2 id="selection-title">Ваше событие — ваши условия</h2></div>
+          <p>Слева — детали запроса. Справа — рекомендации и проверенные запасные варианты.</p>
+        </div>
+
+        <div class="selection-layout">
+          <aside class="form-panel" aria-labelledby="form-title">
+            <div class="panel-title"><div><span class="step-index">01 / ЗАПРОС</span><h3 id="form-title">Расскажите о событии</h3></div><span class="form-spark" aria-hidden="true">✳</span></div>
+            <div class="options-status" id="options-status" role="status" aria-live="polite">Загружаем справочник…</div>
+            <form id="event-form" novalidate>
+              <div class="field-row">
+                <label for="city">Город <span class="required">*</span></label>
+                <select id="city" name="city" required disabled><option value="">Выберите город</option></select>
+                <small class="field-error" id="error-city"></small>
+              </div>
+              <div class="field-row">
+                <label for="date">Дата события <span class="required">*</span></label>
+                <input id="date" name="date" type="date" required disabled>
+                <small class="field-hint" id="date-hint">Доступность проверяется по календарю каталога.</small>
+                <small class="field-error" id="error-date"></small>
+              </div>
+              <div class="field-row">
+                <label for="event_format">Формат <span class="required">*</span></label>
+                <select id="event_format" name="event_format" required disabled><option value="">Выберите формат</option></select>
+                <small class="field-error" id="error-event_format"></small>
+              </div>
+              <div class="field-row">
+                <label for="category">Кого ищем <span class="required">*</span></label>
+                <select id="category" name="category" required disabled><option value="">Сначала выберите город</option></select>
+                <small class="field-error" id="error-category"></small>
+              </div>
+              <div class="field-row">
+                <label for="budget_kzt">Бюджет, ₸ <span class="required">*</span></label>
+                <input id="budget_kzt" name="budget_kzt" type="number" min="1" step="1" inputmode="numeric" placeholder="Например, 1 200 000" required disabled>
+                <small class="field-hint">Сравниваем со стартовой ценой «от», не с итоговой сметой.</small>
+                <small class="field-error" id="error-budget_kzt"></small>
+              </div>
+              <div class="optional-fields">
+                <p>Если важно для вас</p>
+                <div class="optional-grid">
+                  <div class="field-row"><label for="duration_hours">Длительность, ч</label><input id="duration_hours" name="duration_hours" type="number" min="0.5" step="0.5" inputmode="decimal" placeholder="Не указана" disabled><small class="field-error" id="error-duration_hours"></small></div>
+                  <div class="field-row"><label for="language">Язык</label><select id="language" name="language" disabled><option value="">Любой</option></select><small class="field-error" id="error-language"></small></div>
+                </div>
+              </div>
+              <div class="field-row wishes-field">
+                <label for="brief">Ваши пожелания</label>
+                <textarea id="brief" name="brief" rows="4" maxlength="500" placeholder="Например: спокойный ведущий для делового вечера, без шумных конкурсов" disabled></textarea>
+                <div class="wishes-footer"><small>Опишите стиль, атмосферу и то, чего лучше избегать.</small><small id="brief-count">0 / 500</small></div>
+                <small class="field-error" id="error-brief"></small>
+              </div>
+              <button class="submit-button" id="submit-button" type="submit" disabled><span>Найти подходящих</span><span aria-hidden="true">↗</span></button>
+              <p class="form-footnote">Никаких бронирований без вашего решения. Доступность и цену подтвердите у подрядчика.</p>
+            </form>
+          </aside>
+
+          <section class="results-panel" aria-label="Результаты подбора">
+            <div class="results-topline"><span class="step-index">02 / РЕЗУЛЬТАТ</span><span class="results-count" id="results-count">До 3 рекомендаций</span></div>
+            <div class="results-header"><div><h3 id="results-title">Подборка для вас</h3><p id="results-subtitle">Заполните форму, чтобы увидеть рекомендации из каталога.</p></div><span class="results-asterisk" aria-hidden="true">✳</span></div>
+            <div class="tab-list" role="tablist" aria-label="Разделы подборки">
+              <button class="tab-button active" id="tab-main" type="button" role="tab" aria-controls="panel-main" aria-selected="true">Основная подборка <span id="main-tab-count"></span></button>
+              <button class="tab-button" id="tab-alternatives" type="button" role="tab" aria-controls="panel-alternatives" aria-selected="false">Запасные варианты <span id="alternatives-tab-count"></span></button>
+            </div>
+            <div id="panel-main" role="tabpanel" aria-labelledby="tab-main" aria-live="polite">
+              <div class="waiting-state" id="initial-state"><div class="waiting-icon" aria-hidden="true">✳</div><h4>Хороший выбор начинается с деталей</h4><p>Укажите город, дату и пожелания — здесь появятся объяснимые рекомендации.</p></div>
+            </div>
+            <div id="panel-alternatives" role="tabpanel" aria-labelledby="tab-alternatives" aria-live="polite" hidden></div>
+          </section>
+        </div>
+      </section>
+
+      <section class="how-it-works" id="how-it-works" aria-labelledby="how-title">
+        <div><div class="eyebrow"><span class="eyebrow-dash"></span> Прозрачный выбор</div><h2 id="how-title">Понятно, почему именно они.</h2></div>
+        <div class="how-steps"><div><span class="how-number acid-pink">01</span><h3>Ваши условия</h3><p>Город, дата, формат, бюджет и пожелания — в одном запросе.</p></div><div><span class="how-number acid-green">02</span><h3>Проверка каталога</h3><p>Подрядчики проходят обязательные условия до ранжирования.</p></div><div><span class="how-number acid-blue">03</span><h3>Выбор с объяснением</h3><p>До трёх карточек с фактами и вопросами, которые стоит уточнить.</p></div></div>
+      </section>
+    </main>
+    <footer class="site-footer"><span class="footer-brand">рядом.</span><span>Подбор по данным каталога · Доступность и стоимость уточняйте у подрядчика</span><a href="#top">Наверх ↑</a></footer>
+  </div>
+</body>
+</html>
