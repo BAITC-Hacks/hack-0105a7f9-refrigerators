@@ -6,6 +6,7 @@ import sys
 
 from pydantic import ValidationError
 
+from .config import ConfigurationError
 from .models import RecommendationRequest
 from .service import RecommendationInputError, recommend
 
@@ -27,7 +28,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
-    if sys.platform == "win32":
+    if sys.platform == "win32" and hasattr(sys.stdout, "reconfigure") and hasattr(sys.stderr, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
         sys.stderr.reconfigure(encoding="utf-8")
     args = build_parser().parse_args(argv)
@@ -46,6 +47,9 @@ def main(argv: list[str] | None = None) -> int:
     except (ValidationError, RecommendationInputError) as error:
         print(f"Ошибка ввода: {error}", file=sys.stderr)
         return 2
+    except ConfigurationError as error:
+        print(f"Ошибка конфигурации: {error}", file=sys.stderr)
+        return 1
     except (OSError, ValueError) as error:
         print(f"Ошибка каталога: {error}", file=sys.stderr)
         return 1
@@ -68,5 +72,5 @@ def main(argv: list[str] | None = None) -> int:
             print(f"\n{index}. {card.name} ({card.id}) — {card.category}, {card.city}")
             print(f"   Цена от {price} ₸" + (f" [{', '.join(tags)}]" if tags else ""))
             print(f"   {card.explanation}")
-        print(f"\nРежим объяснений: {response.ai_mode}")
+        print(f"\nРежим объяснений: {response.ai_mode}; причина: {response.ai_reason}")
     return 0

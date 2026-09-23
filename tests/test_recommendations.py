@@ -18,7 +18,7 @@ from contractor_match import catalogue as catalogue_module
 from contractor_match.catalogue import load_catalogue
 from contractor_match.explanations import generate_explanations
 from contractor_match.models import RecommendationRequest
-from contractor_match.ranking import quote_candidates
+from contractor_match.ranking import evidence_options
 from contractor_match.service import recommend
 
 
@@ -128,7 +128,7 @@ class RecommendationTests(unittest.TestCase):
     def test_ai_quotes_are_checked_and_fallback_is_safe(self) -> None:
         item = request()
         profiles = list(load_catalogue()[:2])
-        quotes = [quote_candidates(profile)[0] for profile in profiles]
+        quotes = [evidence_options(profile, item)[0] for profile in profiles]
         items = [
             {"id": profile.id, "quote": quote}
             for profile, quote in zip(profiles, quotes)
@@ -177,7 +177,7 @@ class RecommendationTests(unittest.TestCase):
         item = request()
         profiles = list(load_catalogue()[:2])
         items = [
-            {"id": profile.id, "quote": quote_candidates(profile)[0]}
+            {"id": profile.id, "quote": evidence_options(profile, item)[0]}
             for profile in profiles
         ]
         api_response = Mock()
@@ -200,7 +200,7 @@ class RecommendationTests(unittest.TestCase):
     def test_auto_provider_prefers_openai_and_has_total_deadline(self) -> None:
         item = request()
         profiles = list(load_catalogue()[:1])
-        quote = quote_candidates(profiles[0])[0]
+        quote = evidence_options(profiles[0], item)[0]
         raw = json.dumps({"items": [{"id": profiles[0].id, "quote": quote}]})
         with patch.dict(os.environ, {
             "AI_PROVIDER": "auto", "OPENAI_API_KEY": "test-key", "NVIDIA_API_KEY": "test-key"

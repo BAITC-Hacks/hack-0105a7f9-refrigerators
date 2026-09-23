@@ -9,6 +9,9 @@ from .catalogue import Profile, load_catalogue
 from .models import RecommendationRequest
 
 
+RANKING_VERSION = "char-tfidf-3-5-v1"
+
+
 def _grams(text: str) -> Counter[str]:
     result: Counter[str] = Counter()
     for word in re.findall(r"[\w]+", text.casefold(), flags=re.UNICODE):
@@ -76,13 +79,12 @@ def rank_profiles(
 
 
 def quote_candidates(profile: Profile) -> list[str]:
-    candidates = [
+    fragments = [
         fragment.strip()
-        for fragment in re.split(r"(?<=[.!?])\s+|\n+|•", profile.description)
-        if len(fragment.strip()) >= 20
+        for fragment in re.split(r"(?<=[.!?])\s+|(?<=[.!?])(?=[A-ZА-ЯЁ])|\n+|•", profile.description)
+        if fragment.strip()
     ]
-    if not candidates:
-        return [profile.description[:280]]
+    candidates = [fragment for fragment in fragments if len(fragment) >= 12] or fragments
     complete = [fragment for fragment in candidates if len(fragment) <= 280]
     candidates = complete or candidates
     excerpts = [
@@ -92,19 +94,48 @@ def quote_candidates(profile: Profile) -> list[str]:
     return list(dict.fromkeys(excerpt for excerpt in excerpts if excerpt))
 
 
-def local_quote(profile: Profile, request: RecommendationRequest) -> str:
+def has_negative_brief(request: RecommendationRequest) -> bool:
+    return bool(request.brief and re.search(
+        r"\b(?:без|не|никаких|никакого|никакой|исключить|исключая)\b", request.brief.casefold()
+    ))
+
+
+def evidence_options(profile: Profile, request: RecommendationRequest) -> list[str]:
+    """Shortlist by text similarity; it is not proof that the whole brief is met."""
     excerpts = quote_candidates(profile)
-    query = _query(request)
-    if request.brief:
+    evidence_request = request.model_copy(update={"brief": None}) if has_negative_brief(request) else request
+    query = _query(evidence_request) if evidence_request.brief else evidence_request.event_format
+    if evidence_request.brief:
         hints = {
             "форум": "форум конференц бизнес",
             "делов": "делов конференц бизнес",
-            "спокой": "спокой интеллигент ненавязчив мягк",
+            "спокой": "спокой интеллигент ненавязчив мягк тонк юмор манер",
             "традиц": "традиц той казах",
             "креатив": "креатив оригинальн необыч",
+            "эмоц": "эмоц атмосфер искрен естеств динамик момент",
+            "репортаж": "репортаж незаметн момент событ",
         }
         for stem, related_words in hints.items():
-            if stem in request.brief.casefold():
+            if stem in evidence_request.brief.casefold():
                 query += f" {related_words}"
     scores = DescriptionIndex(excerpts).similarities(query)
-    return excerpts[max(range(len(excerpts)), key=lambda index: (scores[index], -index))]
+    boilerplate = re.compile(
+        r"топ[-\s]?\d|лучши[йемх]|идеальн|приветств|с уважением|всегда ваш|делает уровень|не сомнева", re.I
+    )
+    concrete = re.compile(
+        r"\d|опыт|юмор|манер|подач|сценар|интерактив|импровиз|репортаж|эмоц|съ[её]м|"
+        r"флорист|цветоч|оформ|оборуд|банкет|террас|панорам|язык|формат|конференц|тимбилдинг|"
+        r"стиль|танц|развлеч|реч|незаметн|атмосфер", re.I
+    )
+    ordered = sorted(
+        range(len(excerpts)),
+        key=lambda index: (
+            bool(boilerplate.search(excerpts[index])), not bool(concrete.search(excerpts[index])),
+            -scores[index], index,
+        ),
+    )
+    return [excerpts[index] for index in ordered[:3]]
+
+
+def local_quote(profile: Profile, request: RecommendationRequest) -> str:
+    return evidence_options(profile, request)[0]

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date
+import re
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -14,19 +15,36 @@ EventFormat = Literal[
 Language = Literal["русский", "казахский", "английский"]
 Status = Literal["matched", "category_absent", "no_eligible"]
 AiMode = Literal["openai", "nvidia", "fallback", "not_used"]
+AiReason = Literal[
+    "success", "not_needed", "local_requested", "missing_key", "timeout",
+    "auth_error", "rate_limited", "network_error", "provider_error",
+    "invalid_response", "invalid_evidence",
+]
 
 
 class RecommendationRequest(BaseModel):
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
-    city: str = Field(min_length=1)
+    city: str = Field(min_length=1, max_length=100)
     date: date
     event_format: EventFormat
-    category: str = Field(min_length=1)
-    budget_kzt: int = Field(gt=0)
-    duration_hours: float | None = Field(default=None, gt=0)
+    category: str = Field(min_length=1, max_length=100)
+    budget_kzt: int = Field(gt=0, strict=True)
+    duration_hours: float | None = Field(default=None, gt=0, strict=True, allow_inf_nan=False)
     language: Language | None = None
     brief: str | None = Field(default=None, max_length=500)
+
+    @field_validator("city", "category", "brief", mode="before")
+    @classmethod
+    def normalize_whitespace(cls, value: object) -> object:
+        return " ".join(value.split()) if isinstance(value, str) else value
+
+    @field_validator("date", mode="before")
+    @classmethod
+    def calendar_date_only(cls, value: object) -> object:
+        if type(value) is date or (isinstance(value, str) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", value)):
+            return value
+        raise ValueError("Укажите дату в формате ГГГГ-ММ-ДД, без времени и timestamp.")
 
     @field_validator("event_format", "language", mode="before")
     @classmethod
@@ -62,6 +80,14 @@ class Card(BaseModel):
     price_imputed: bool
     explanation: str
     evidence_quote: str
+    evidence_note: str | None = None
+
+
+class SelectionCounts(BaseModel):
+    category_total: int = 0
+    eligible_total: int = 0
+    returned_total: int = 0
+    excluded_total: int = 0
 
 
 class RecommendationResponse(BaseModel):
@@ -70,6 +96,8 @@ class RecommendationResponse(BaseModel):
     cards: list[Card]
     reasons: dict[str, int]
     ai_mode: AiMode
+    ai_reason: AiReason = "not_needed"
+    counts: SelectionCounts = Field(default_factory=SelectionCounts)
 
 
 class CatalogueOptions(BaseModel):
@@ -87,7 +115,7 @@ class InputIssue(BaseModel):
 
 
 class ApiError(BaseModel):
-    code: Literal["invalid_request"] = "invalid_request"
+    code: Literal["invalid_request", "service_misconfigured"] = "invalid_request"
     message: str = "Проверьте параметры запроса."
     details: list[InputIssue]
 

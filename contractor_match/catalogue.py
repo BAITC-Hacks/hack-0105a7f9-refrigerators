@@ -77,9 +77,9 @@ def _validate_profile(profile: Profile) -> None:
         raise ValueError(f"busy_dates вне календаря: {', '.join(str(day) for day in sorted(unknown))}")
 
 
-@lru_cache(maxsize=1)
-def load_catalogue() -> tuple[Profile, ...]:
-    with DATA_FILE.open(encoding="utf-8-sig", newline="") as source:
+def read_catalogue(path: Path) -> tuple[Profile, ...]:
+    """Validate any nonempty catalogue, including small isolated test fixtures."""
+    with path.open(encoding="utf-8-sig", newline="") as source:
         reader = csv.DictReader(source)
         if (
             reader.fieldnames is None
@@ -116,6 +116,16 @@ def load_catalogue() -> tuple[Profile, ...]:
                 ) from error
             parsed.append(profile)
         profiles = tuple(parsed)
-    if len(profiles) != 66 or len({p.id for p in profiles}) != len(profiles):
-        raise ValueError("Ожидались 66 профилей с уникальными id")
+    if not profiles:
+        raise ValueError("Каталог не может быть пустым")
+    if len({p.id for p in profiles}) != len(profiles):
+        raise ValueError("В каталоге повторяются id профилей")
+    return profiles
+
+
+@lru_cache(maxsize=1)
+def load_catalogue() -> tuple[Profile, ...]:
+    profiles = read_catalogue(DATA_FILE)
+    if len(profiles) != 66 or sum(p.synthetic for p in profiles) != 13:
+        raise ValueError("В исходном наборе ожидаются 66 профилей, включая 13 синтетических")
     return profiles

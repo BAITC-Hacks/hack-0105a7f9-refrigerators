@@ -8,6 +8,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from .catalogue import load_catalogue
+from .config import ConfigurationError, load_settings
 from .models import (
     ApiError,
     CatalogueOptions,
@@ -24,6 +25,7 @@ from .service import RecommendationInputError, catalogue_options, recommend
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    load_settings()
     load_catalogue()
     catalog_index()
     yield
@@ -43,6 +45,10 @@ def _validation_message(field: str, error: dict) -> str:
         return "Укажите целое число."
     if kind in {"float_parsing", "float_type"}:
         return "Укажите число."
+    if kind == "finite_number":
+        return "Укажите конечное число."
+    if kind == "extra_forbidden":
+        return "Неизвестное поле запроса."
     if kind.startswith("date_"):
         return "Укажите дату в формате ГГГГ-ММ-ДД."
     if kind == "literal_error":
@@ -88,8 +94,18 @@ async def recommendation_input_error(
     return _error_response([InputIssue(field=error.field, message=str(error))])
 
 
+@app.exception_handler(ConfigurationError)
+async def configuration_error(_request: Request, error: ConfigurationError) -> JSONResponse:
+    payload = ErrorResponse(error=ApiError(
+        code="service_misconfigured", message="Сервис настроен некорректно.",
+        details=[InputIssue(field="configuration", message=str(error))],
+    ))
+    return JSONResponse(status_code=503, content=payload.model_dump())
+
+
 @app.get("/health")
 def health() -> dict[str, str]:
+    load_settings()
     load_catalogue()
     return {"status": "ok"}
 
@@ -102,7 +118,7 @@ def options() -> CatalogueOptions:
 @app.post(
     "/recommendations",
     response_model=RecommendationResponse,
-    responses={422: {"model": ErrorResponse}},
+    responses={422: {"model": ErrorResponse}, 503: {"model": ErrorResponse}},
 )
 def recommendations(request: RecommendationRequest) -> RecommendationResponse:
     return recommend(request)

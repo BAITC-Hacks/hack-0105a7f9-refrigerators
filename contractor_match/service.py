@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from .catalogue import Profile, load_catalogue
+from .config import load_settings
 from .explanations import generate_explanations
 from .models import (
     FIRST_DATE,
@@ -9,6 +10,7 @@ from .models import (
     CatalogueOptions,
     RecommendationRequest,
     RecommendationResponse,
+    SelectionCounts,
 )
 from .ranking import rank_profiles
 
@@ -81,13 +83,13 @@ def _reason_text(reasons: dict[str, int]) -> str:
 
 
 def _card_explanation(
-    profile: Profile, request: RecommendationRequest, quote: str
+    profile: Profile, request: RecommendationRequest, quote: str, note: str | None = None
 ) -> str:
     date_text = request.date.strftime("%d.%m.%Y")
     price = f"{profile.price_from_kzt:,}".replace(",", " ")
     first = (
-        f"Свободен {date_text}, работает с форматом «{request.event_format}»; "
-        f"цена от {price} ₸ не превышает бюджет"
+        f"По календарю датасета свободен {date_text}, работает с форматом «{request.event_format}»; "
+        f"стартовая цена {price} ₸ укладывается в бюджет"
     )
     if request.language:
         first += f", работает на языке «{request.language}»"
@@ -95,10 +97,16 @@ def _card_explanation(
         first += f", может работать до {profile.max_hours:g} ч"
     if profile.price_imputed:
         first += " (цена оценочная)"
-    return f"{first}. В описании: «{quote.rstrip('.')}»."
+    if profile.city_imputed:
+        first += "; город восстановлен при подготовке данных"
+    second = f"В описании подрядчика: «{quote}»"
+    if note:
+        second += f"; {note}"
+    return f"{first}. {second}."
 
 
 def recommend(request: RecommendationRequest) -> RecommendationResponse:
+    load_settings()
     catalogue = load_catalogue()
     cities = {profile.city for profile in catalogue}
     categories = {category for profile in catalogue for category in profile.categories}
@@ -149,6 +157,7 @@ def recommend(request: RecommendationRequest) -> RecommendationResponse:
             cards=[],
             reasons=reasons,
             ai_mode="not_used",
+            counts=SelectionCounts(category_total=len(category_profiles), excluded_total=len(category_profiles)),
         )
 
     selected = rank_profiles(eligible, request)[:3]
@@ -163,17 +172,25 @@ def recommend(request: RecommendationRequest) -> RecommendationResponse:
             synthetic=profile.synthetic,
             city_imputed=profile.city_imputed,
             price_imputed=profile.price_imputed,
-            explanation=_card_explanation(profile, request, evidence.quotes[profile.id]),
+            explanation=_card_explanation(profile, request, evidence.quotes[profile.id], evidence.notes.get(profile.id)),
             evidence_quote=evidence.quotes[profile.id],
+            evidence_note=evidence.notes.get(profile.id),
         )
         for profile in selected
     ]
     message = f"Подобрано подрядчиков: {len(cards)}."
     if len(cards) < 3:
-        message += f" Меньше трёх: в городе всего {len(category_profiles)} профилей категории"
+        message += f" Меньше трёх: из {len(category_profiles)} профилей категории подходят {len(eligible)}"
         if _reason_text(reasons):
             message += f"; не подошли по условиям: {_reason_text(reasons)}"
-        message += "."
+        message += ". Причины могут пересекаться."
+    elif len(eligible) > 3:
+        message += f" Всего подходят {len(eligible)}; показаны первые три по ранжированию."
     return RecommendationResponse(
-        status="matched", message=message, cards=cards, reasons=reasons, ai_mode=evidence.mode
+        status="matched", message=message, cards=cards, reasons=reasons, ai_mode=evidence.mode,
+        ai_reason=evidence.reason,
+        counts=SelectionCounts(
+            category_total=len(category_profiles), eligible_total=len(eligible),
+            returned_total=len(cards), excluded_total=len(category_profiles) - len(eligible),
+        ),
     )
