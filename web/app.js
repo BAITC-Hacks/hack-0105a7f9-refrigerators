@@ -14,6 +14,7 @@ const money = value => `${new Intl.NumberFormat('ru-RU').format(value)} ₸`;
 let options;
 let response;
 let requestSerial = 0;
+let pending = false;
 
 function element(tag, className, content) {
   const node = document.createElement(tag);
@@ -50,8 +51,12 @@ function setOptionsStatus(message, type = '') {
 
 function populateCategory(selected = '') {
   const city = fields.city.value;
-  const categories = options?.categories_by_city?.[city] ?? [];
+  const available = options?.categories_by_city?.[city] ?? [];
+  const categories = city ? [...new Set(Object.values(options.categories_by_city).flat())] : [];
   setOptions(fields.category, categories, city ? 'Выберите категорию' : 'Сначала выберите город');
+  for (const option of fields.category.options) {
+    if (option.value && !available.includes(option.value)) option.textContent += ' — нет в этом городе';
+  }
   if (categories.includes(selected)) fields.category.value = selected;
 }
 
@@ -99,6 +104,7 @@ function clearErrors() {
 function showFieldErrors(details) {
   let first;
   for (const item of details ?? []) {
+    if (!Object.hasOwn(fields, item.field)) continue;
     const field = fields[item.field];
     if (!field) continue;
     document.getElementById(`error-${item.field}`).textContent = item.message;
@@ -136,6 +142,8 @@ function switchTab(which) {
   document.getElementById('tab-main').setAttribute('aria-selected', String(main));
   document.getElementById('tab-alternatives').classList.toggle('active', !main);
   document.getElementById('tab-alternatives').setAttribute('aria-selected', String(!main));
+  document.getElementById('tab-main').tabIndex = main ? 0 : -1;
+  document.getElementById('tab-alternatives').tabIndex = main ? -1 : 0;
   mainPanel.hidden = !main;
   alternativesPanel.hidden = main;
 }
@@ -161,7 +169,7 @@ function renderLoading() {
 }
 
 function renderFailure(error) {
-  let message = error?.message || 'Не удалось получить ответ. Попробуйте ещё раз.';
+  let message = error instanceof ApiClientError ? error.message : 'Не удалось получить ответ. Попробуйте ещё раз.';
   if (error?.kind === 'network') message = 'Нет связи с API. Убедитесь, что сервер проекта запущен, и повторите запрос.';
   if (error?.kind === 'timeout') message = 'Сервер отвечает слишком долго. Попробуйте ещё раз.';
   message = withRequestId(message, error);
@@ -176,6 +184,7 @@ function renderFailure(error) {
 
 async function submitRequest(request) {
   const current = ++requestSerial;
+  pending = true;
   response = undefined;
   clearErrors();
   submitButton.disabled = true;
@@ -191,10 +200,31 @@ async function submitRequest(request) {
     if (current === requestSerial) renderFailure(error);
   } finally {
     if (current === requestSerial) {
+      pending = false;
       submitButton.disabled = false;
       submitButton.firstElementChild.textContent = 'Найти подходящих';
     }
   }
+}
+
+// A response describes the submitted form snapshot. Editing any condition
+// invalidates both visible alternatives and requests that are still in flight.
+function invalidateResults() {
+  if (!pending && !response) return;
+  requestSerial++;
+  latest.cancel();
+  pending = false;
+  response = undefined;
+  submitButton.disabled = !options;
+  submitButton.firstElementChild.textContent = 'Найти подходящих';
+  document.getElementById('results-title').textContent = 'Условия изменены';
+  document.getElementById('results-subtitle').textContent = 'Выполните подбор для новых условий.';
+  document.getElementById('results-count').textContent = 'Ожидаем запрос';
+  document.getElementById('main-tab-count').textContent = '';
+  document.getElementById('alternatives-tab-count').textContent = '';
+  mainPanel.replaceChildren(waiting('Обновите подбор', 'Нажмите «Найти подходящих», чтобы проверить новые условия.'));
+  alternativesPanel.replaceChildren(waiting('Условия изменились', 'Запасные варианты появятся после нового подбора.'));
+  switchTab('main');
 }
 
 function list(items, className) {
@@ -410,7 +440,7 @@ form.addEventListener('submit', event => {
   const request = validateForm();
   if (request) submitRequest(request);
 });
-fields.city.addEventListener('change', () => {populateCategory();updateTicket();});
+fields.city.addEventListener('change', () => {populateCategory(fields.category.value);updateTicket();});
 fields.date.addEventListener('input', updateTicket);
 fields.event_format.addEventListener('change', updateTicket);
 fields.brief.addEventListener('input', () => {document.getElementById('brief-count').textContent = `${fields.brief.value.length} / 500`;});
@@ -419,12 +449,20 @@ for (const field of Object.values(fields)) field.addEventListener('input', () =>
   if (error) error.textContent = '';
   field.removeAttribute('aria-invalid');
 });
+form.addEventListener('input', invalidateResults);
+form.addEventListener('change', invalidateResults);
 document.getElementById('tab-main').addEventListener('click', () => switchTab('main'));
 document.getElementById('tab-alternatives').addEventListener('click', () => switchTab('alternatives'));
-document.getElementById('tab-main').addEventListener('keydown', event => {if (event.key === 'ArrowRight') {document.getElementById('tab-alternatives').focus();switchTab('alternatives');}});
-document.getElementById('tab-alternatives').addEventListener('keydown', event => {if (event.key === 'ArrowLeft') {document.getElementById('tab-main').focus();switchTab('main');}});
+for (const name of ['main', 'alternatives']) document.getElementById(`tab-${name}`).addEventListener('keydown', event => {
+  if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+  event.preventDefault();
+  const target = event.key === 'Home' ? 'main' : event.key === 'End' ? 'alternatives' : name === 'main' ? 'alternatives' : 'main';
+  switchTab(target);
+  document.getElementById(`tab-${target}`).focus();
+});
 window.addEventListener('pagehide', () => latest.cancel());
 
 alternativesPanel.append(waiting('Запасные пути появятся здесь', 'После подбора покажем соседние условия и то, что нужно уточнить по пожеланиям.'));
+switchTab('main');
 loadOptions();
 

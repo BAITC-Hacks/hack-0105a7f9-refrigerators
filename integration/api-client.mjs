@@ -14,6 +14,34 @@ export class ApiClientError extends Error {
 
 const record = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 const strings = value => Array.isArray(value) && value.every(item => typeof item === 'string');
+const count = value => Number.isSafeInteger(value) && value >= 0;
+const positive = value => typeof value === 'number' && Number.isFinite(value) && value > 0;
+const nullableText = value => value == null || typeof value === 'string';
+const isoDate = value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)
+  && Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;
+
+function validRequest(value) {
+  return record(value) && ['city', 'category', 'event_format'].every(key => typeof value[key] === 'string' && value[key].trim())
+    && isoDate(value.date) && count(value.budget_kzt) && value.budget_kzt > 0
+    && (value.duration_hours == null || positive(value.duration_hours))
+    && nullableText(value.language) && nullableText(value.brief);
+}
+
+function validAlternative(value) {
+  if (!record(value) || !validRequest(value.request) || typeof value.message !== 'string'
+    || !count(value.eligible_count) || !value.eligible_count || !count(value.added_count) || !value.added_count
+    || value.added_count > value.eligible_count || !strings(value.candidate_ids)
+    || value.candidate_ids.length !== value.eligible_count || new Set(value.candidate_ids).size !== value.candidate_ids.length
+    || !Array.isArray(value.changes) || !value.changes.length || value.changes.length > 3) return false;
+  const seen = new Set();
+  return value.changes.every(change => {
+    if (!record(change) || !['date', 'budget_kzt', 'duration_hours'].includes(change.field) || seen.has(change.field)) return false;
+    seen.add(change.field);
+    const valid = change.field === 'date' ? isoDate : change.field === 'budget_kzt' ? value => count(value) && value > 0 : positive;
+    return valid(change.from_value) && valid(change.to_value) && change.from_value !== change.to_value
+      && value.request[change.field] === change.to_value;
+  });
+}
 
 function assertPayload(kind, value) {
   let valid = record(value);
@@ -21,18 +49,34 @@ function assertPayload(kind, value) {
   if (kind === 'options') {
     valid &&= strings(value.cities) && record(value.categories_by_city)
       && Object.values(value.categories_by_city).every(strings)
+      && value.cities.every(city => Object.hasOwn(value.categories_by_city, city))
       && strings(value.event_formats) && strings(value.languages)
-      && typeof value.calendar_start === 'string' && typeof value.calendar_end === 'string';
+      && isoDate(value.calendar_start) && isoDate(value.calendar_end) && value.calendar_start <= value.calendar_end;
   }
   if (kind === 'recommendations') {
     valid &&= ['matched', 'category_absent', 'no_eligible'].includes(value.status)
       && typeof value.message === 'string' && record(value.reasons)
-      && typeof value.ai_mode === 'string' && Array.isArray(value.cards) && value.cards.length <= 3
+      && Object.values(value.reasons).every(count)
+      && ['openai', 'nvidia', 'brev', 'fallback', 'not_used'].includes(value.ai_mode)
+      && Array.isArray(value.cards) && value.cards.length <= 3
       && value.cards.every(card => record(card) && typeof card.id === 'string'
-        && typeof card.name === 'string' && typeof card.explanation === 'string'
-        && typeof card.evidence_quote === 'string' && Number.isSafeInteger(card.price_from_kzt))
+        && ['name', 'city', 'category', 'explanation', 'evidence_quote'].every(key => typeof card[key] === 'string')
+        && ['synthetic', 'city_imputed', 'price_imputed'].every(key => typeof card[key] === 'boolean')
+        && ['why_fits', 'to_clarify', 'differences'].every(key => card[key] === undefined || strings(card[key]))
+        && nullableText(card.evidence_note) && count(card.price_from_kzt) && card.price_from_kzt > 0)
+      && new Set(value.cards.map(card => card.id)).size === value.cards.length
       && (value.status === 'matched' ? value.cards.length > 0 : value.cards.length === 0)
-      && (value.alternatives === undefined || Array.isArray(value.alternatives));
+      && record(value.counts)
+      && ['category_total', 'eligible_total', 'returned_total', 'excluded_total'].every(key => count(value.counts[key]))
+      && value.counts.returned_total === value.cards.length && value.counts.returned_total === Math.min(3, value.counts.eligible_total)
+      && value.counts.category_total === value.counts.eligible_total + value.counts.excluded_total
+      && (value.status === 'category_absent' ? value.counts.category_total === 0 : value.counts.category_total > 0)
+      && record(value.understanding)
+      && ['styles', 'notes', 'unwanted', 'languages'].every(key => strings(value.understanding[key]))
+      && nullableText(value.understanding.effective_language)
+      && ['field', 'brief', 'unspecified'].includes(value.understanding.language_source)
+      && nullableText(value.alternatives_note)
+      && (value.alternatives === undefined || (Array.isArray(value.alternatives) && value.alternatives.length <= 3 && value.alternatives.every(validAlternative)));
   }
   if (!valid) throw new ApiClientError('invalid_response', 'Сервер вернул неожиданный формат ответа.');
   return value;
@@ -41,6 +85,7 @@ function assertPayload(kind, value) {
 function checkBaseUrl(value) {
   if (typeof value !== 'string') throw new TypeError('baseUrl должен быть строкой.');
   value = value.trim().replace(/\/+$/, '');
+  if (/[\\\s\u0000-\u001f\u007f]/.test(value)) throw new TypeError('baseUrl содержит недопустимые символы.');
   if (!value || (/^\/(?!\/)/.test(value) && !/[?#]/.test(value))) return value;
   const parsed = new URL(value);
   if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password || parsed.search || parsed.hash) {

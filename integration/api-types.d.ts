@@ -10,7 +10,7 @@ export type Alternative = {
 };
 
 export type ApiError = {
-  "code"?: "invalid_request" | "service_misconfigured" | "internal_error" | "not_found" | "method_not_allowed" | "http_error" | "catalogue_unavailable";
+  "code"?: "invalid_request" | "service_misconfigured" | "internal_error" | "not_found" | "method_not_allowed" | "http_error" | "catalogue_unavailable" | "request_too_large";
   "message"?: string;
   "details": Array<InputIssue>;
 };

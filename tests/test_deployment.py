@@ -2,7 +2,9 @@ import copy
 import csv
 import json
 import os
+import re
 import unittest
+from urllib.parse import urljoin
 from unittest.mock import patch
 
 import httpx
@@ -109,11 +111,17 @@ class DeploymentTests(unittest.TestCase):
         with TestClient(app) as client:
             page = client.get("/")
             self.assertEqual(page.status_code, 200)
-            self.assertIn('src="./app.js"', page.text)
+            scripts = re.findall(r'<script\b[^>]*\bsrc="([^"]+)"', page.text)
+            self.assertTrue(scripts)
+            for src in scripts:
+                script = client.get(urljoin(str(page.url), src))
+                self.assertEqual(script.status_code, 200, src)
+                self.assertIn("javascript", script.headers["content-type"])
             for route in ["/web/app.js", "/web/styles.css", "/integration/api-client.mjs", "/catalogue/options"]:
                 self.assertEqual(client.get(route).status_code, 200, route)
             for route in ["/.env", "/data/contractors.csv", "/contractor_match/config.py", "/.git/config",
-                          "/integration/examples/matched.json", "/web/%2e%2e/data/contractors.csv"]:
+                          "/integration/examples/matched.json", "/web/%2e%2e/data/contractors.csv",
+                          "/web/README.md", "/web/.env", "/prototypes/offline-web/dist/catalogue.json"]:
                 self.assertEqual(client.get(route).status_code, 404, route)
             result = client.post("/recommendations", json={"city": "Алматы", "category": "Ведущий",
                 "event_format": "корпоратив", "date": "2026-12-19", "budget_kzt": 1200000})

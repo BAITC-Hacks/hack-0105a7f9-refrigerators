@@ -3,6 +3,7 @@ from pathlib import Path
 
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException
 
 from contractor_match.api import create_app
 
@@ -20,5 +21,12 @@ def browser_client():
     return FileResponse(ROOT / "integration" / "api-client.mjs", media_type="text/javascript")
 
 
-# Only these public assets are served; never mount the repository root.
-app.mount("/web", StaticFiles(directory=ROOT / "web", html=True), name="website")
+class WebsiteFiles(StaticFiles):
+    async def get_response(self, path, scope):
+        # Adding docs, tests or a local config under web/ must not publish it.
+        if path not in {".", "index.html", "app.js", "styles.css"}:
+            raise HTTPException(404)
+        return await super().get_response(path, scope)
+
+
+app.mount("/web", WebsiteFiles(directory=ROOT / "web", html=True), name="website")

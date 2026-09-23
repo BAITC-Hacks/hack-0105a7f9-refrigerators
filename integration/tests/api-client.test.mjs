@@ -163,3 +163,69 @@ test('client leaves applying alternatives to the caller and preserves the full r
   assert.deepEqual(sent, request);
   assert.equal(short.request.date, '2026-12-19');
 });
+
+test('rejects incomplete or inconsistent fields consumed by the website', async () => {
+  const mutations = [
+    data => { delete data.counts; },
+    data => { data.counts.eligible_total = -1; },
+    data => { data.counts.returned_total = 0; },
+    data => { data.counts.category_total++; },
+    data => { data.understanding.notes = 'not an array'; },
+    data => { data.reasons.busy = '3'; },
+    data => { data.cards[0].synthetic = 'false'; },
+    data => { data.cards[0].price_from_kzt = 0; },
+    data => { delete data.cards[0].city; },
+    data => { data.cards[0].to_clarify = [null]; },
+    data => { data.cards[1].id = data.cards[0].id; },
+  ];
+  for (const mutate of mutations) {
+    const payload = structuredClone(sample.response);
+    mutate(payload);
+    const client = createApiClient({fetchImpl: async () => jsonResponse(payload)});
+    await assert.rejects(client.recommend(sample.request), error => error.kind === 'invalid_response');
+  }
+});
+
+test('rejects malformed alternatives before they can rewrite the form', async () => {
+  const short = await fixture('short_with_alternative');
+  for (const mutate of [
+    alternative => { alternative.request = null; },
+    alternative => { alternative.request.date = '2026-02-30'; },
+    alternative => { alternative.changes[0].to_value = '2026-12-16'; },
+    alternative => { alternative.changes[0].field = '__proto__'; },
+    alternative => { alternative.candidate_ids = []; },
+  ]) {
+    const payload = structuredClone(short.response);
+    mutate(payload.alternatives[0]);
+    const client = createApiClient({fetchImpl: async () => jsonResponse(payload)});
+    await assert.rejects(client.recommend(short.request), error => error.kind === 'invalid_response');
+  }
+});
+
+test('options must have real dates and a category entry for every city', async () => {
+  const original = await fixture('catalogue_options');
+  for (const mutate of [
+    data => { data.calendar_start = '2026-02-30'; },
+    data => { data.calendar_end = '2020-01-01'; },
+    data => { delete data.categories_by_city[data.cities[0]]; },
+  ]) {
+    const payload = structuredClone(original); mutate(payload);
+    const client = createApiClient({fetchImpl: async () => jsonResponse(payload)});
+    await assert.rejects(client.catalogueOptions(), error => error.kind === 'invalid_response');
+  }
+});
+
+test('rejects ambiguous URL prefixes and credentials', () => {
+  for (const baseUrl of ['/\\example.com', '/api\npath', '//example.com', 'https://user:secret@example.com', 'https://example.com?key=secret']) {
+    assert.throws(() => createApiClient({baseUrl}), TypeError);
+  }
+});
+
+test('editing without submitting invalidates a pending recommendation', async () => {
+  let resolve;
+  const latest = createLatestRecommender({recommend: () => new Promise(done => { resolve = done; })});
+  const pending = latest.recommend(sample.request);
+  latest.cancel();
+  resolve(sample.response);
+  assert.equal(await pending, null);
+});

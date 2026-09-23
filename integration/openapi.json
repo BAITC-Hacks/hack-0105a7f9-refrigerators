@@ -271,6 +271,32 @@
               }
             }
           },
+          "413": {
+            "description": "Content Too Large",
+            "headers": {
+              "X-Request-ID": {
+                "description": "Созданный сервером номер запроса для поиска в логах.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{32}$"
+                }
+              },
+              "X-Process-Time-Ms": {
+                "description": "Время до начала HTTP-ответа в миллисекундах.",
+                "schema": {
+                  "type": "number",
+                  "minimum": 0.0
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "422": {
             "description": "Unprocessable Content",
             "headers": {
@@ -357,7 +383,8 @@
               "not_found",
               "method_not_allowed",
               "http_error",
-              "catalogue_unavailable"
+              "catalogue_unavailable",
+              "request_too_large"
             ],
             "title": "Code",
             "default": "invalid_request"
@@ -720,6 +747,7 @@
           },
           "budget_kzt": {
             "type": "integer",
+            "maximum": 9007199254740991.0,
             "exclusiveMinimum": 0.0,
             "title": "Budget Kzt"
           },

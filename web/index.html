@@ -7,7 +7,7 @@
   <meta name="description" content="Подбор event-подрядчиков по дате, бюджету и пожеланиям с проверяемыми причинами выбора.">
   <title>рядом. — Подбор людей для вашего события</title>
   <link rel="stylesheet" href="./styles.css?v=20260923-details">
-  <script type="module" src="./app.js?v=20260923-details"></script>
+  <script type="module" src="./app.js?v=20260923-audit"></script>
 </head>
 <body>
   <div class="page-shell">
@@ -87,7 +87,7 @@
               <div class="optional-fields">
                 <p>Если важно для вас</p>
                 <div class="optional-grid">
-                  <div class="field-row"><label for="duration_hours">Длительность, ч</label><input id="duration_hours" name="duration_hours" type="number" min="0.5" step="0.5" inputmode="decimal" placeholder="Не указана" disabled><small class="field-error" id="error-duration_hours"></small></div>
+                  <div class="field-row"><label for="duration_hours">Длительность, ч</label><input id="duration_hours" name="duration_hours" type="number" min="0" step="any" inputmode="decimal" placeholder="Не указана" disabled><small class="field-error" id="error-duration_hours"></small></div>
                   <div class="field-row"><label for="language">Язык</label><select id="language" name="language" disabled><option value="">Любой</option></select><small class="field-error" id="error-language"></small></div>
                 </div>
               </div>

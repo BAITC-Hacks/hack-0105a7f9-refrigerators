@@ -29,7 +29,7 @@ class RecommendationRequest(BaseModel):
     date: date
     event_format: EventFormat
     category: str = Field(min_length=1, max_length=100)
-    budget_kzt: int = Field(gt=0, strict=True)
+    budget_kzt: int = Field(gt=0, le=9007199254740991, strict=True)
     duration_hours: float | None = Field(default=None, gt=0, strict=True, allow_inf_nan=False)
     language: Language | None = None
     brief: str | None = Field(default=None, max_length=500)
@@ -149,7 +149,7 @@ class InputIssue(BaseModel):
 
 class ApiError(BaseModel):
     code: Literal["invalid_request", "service_misconfigured", "internal_error", "not_found",
-                  "method_not_allowed", "http_error", "catalogue_unavailable"] = "invalid_request"
+                  "method_not_allowed", "http_error", "catalogue_unavailable", "request_too_large"] = "invalid_request"
     message: str = "Проверьте параметры запроса."
     details: list[InputIssue]
 

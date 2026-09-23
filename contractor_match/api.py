@@ -26,6 +26,7 @@ from .models import (
 )
 from .ranking import catalog_index
 from .observability import RequestLoggingMiddleware, configure_logging, log_exception
+from .request_limits import RequestBodyLimitMiddleware
 from .service import RecommendationInputError, catalogue_options, recommend
 
 
@@ -63,6 +64,8 @@ def _validation_message(field: str, error: dict) -> str:
         return "Текст слишком длинный."
     if kind in {"greater_than", "greater_than_equal"}:
         return "Значение должно быть больше нуля."
+    if kind == "less_than_equal":
+        return "Бюджет должен быть не больше 9 007 199 254 740 991 ₸."
     if kind in {"int_parsing", "int_type"}:
         return "Укажите целое число."
     if kind in {"float_parsing", "float_type"}:
@@ -171,6 +174,7 @@ def create_app() -> FastAPI:
     api.add_exception_handler(HTTPException, http_error)
     # CORS wraps the error handler; request tracing also wraps preflight responses.
     api.middleware("http")(safe_unexpected_error)
+    api.add_middleware(RequestBodyLimitMiddleware)
     api.add_middleware(CORSMiddleware, allow_origins=load_cors_origins(),
                        allow_methods=["GET", "POST"], allow_headers=["Content-Type", "Accept"],
                        allow_credentials=False, expose_headers=list(DIAGNOSTIC_HEADERS))
@@ -181,7 +185,8 @@ def create_app() -> FastAPI:
                       operation_id="getCatalogueOptions")
     api.add_api_route("/recommendations", recommendations, methods=["POST"],
                       response_model=RecommendationResponse, operation_id="recommend",
-                      responses={422: {"model": ErrorResponse, "headers": DIAGNOSTIC_HEADERS}})
+                      responses={413: {"model": ErrorResponse, "headers": DIAGNOSTIC_HEADERS},
+                                 422: {"model": ErrorResponse, "headers": DIAGNOSTIC_HEADERS}})
     return api
 
 
