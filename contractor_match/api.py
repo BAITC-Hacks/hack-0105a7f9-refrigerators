@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from fastapi import FastAPI, HTTPException
 
-from .models import RecommendationRequest, RecommendationResponse
-from .service import recommend
+from .models import CatalogueOptions, RecommendationRequest, RecommendationResponse
+from .service import catalogue_options, recommend
 
 
 app = FastAPI(
@@ -16,6 +16,11 @@ app = FastAPI(
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/catalogue/options", response_model=CatalogueOptions)
+def options() -> CatalogueOptions:
+    return catalogue_options()
 
 
 @app.post("/recommendations", response_model=RecommendationResponse)

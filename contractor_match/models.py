@@ -28,6 +28,13 @@ class RecommendationRequest(BaseModel):
     language: Language | None = None
     brief: str | None = Field(default=None, max_length=500)
 
+    @field_validator("event_format", "language", mode="before")
+    @classmethod
+    def normalize_choice(cls, value: object) -> object:
+        if isinstance(value, str):
+            return " ".join(value.casefold().split())
+        return value
+
     @field_validator("date")
     @classmethod
     def date_in_calendar(cls, value: date) -> date:
@@ -63,3 +70,12 @@ class RecommendationResponse(BaseModel):
     cards: list[Card]
     reasons: dict[str, int]
     ai_mode: AiMode
+
+
+class CatalogueOptions(BaseModel):
+    cities: list[str]
+    categories_by_city: dict[str, list[str]]
+    event_formats: list[str]
+    languages: list[str]
+    calendar_start: date
+    calendar_end: date

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import re
@@ -53,7 +54,7 @@ def _extract_openai_text(data: dict) -> str:
     raise ValueError("OpenAI не вернул текст ответа")
 
 
-def _call_openai(key: str, request: RecommendationRequest, profiles: list[Profile]) -> str:
+async def _call_openai(key: str, request: RecommendationRequest, profiles: list[Profile]) -> str:
     model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
     schema = {
         "type": "object",
@@ -71,49 +72,49 @@ def _call_openai(key: str, request: RecommendationRequest, profiles: list[Profil
         "required": ["items"],
         "additionalProperties": False,
     }
-    response = httpx.post(
-        "https://api.openai.com/v1/responses",
-        headers={"Authorization": f"Bearer {key}"},
-        json={
-            "model": model,
-            "store": False,
-            "input": [
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": _payload(request, profiles)},
-            ],
-            "text": {
-                "format": {
-                    "type": "json_schema",
-                    "name": "contractor_evidence",
-                    "strict": True,
-                    "schema": schema,
-                }
+    async with httpx.AsyncClient(timeout=TIMEOUT_SECONDS) as client:
+        response = await client.post(
+            "https://api.openai.com/v1/responses",
+            headers={"Authorization": f"Bearer {key}"},
+            json={
+                "model": model,
+                "store": False,
+                "input": [
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": _payload(request, profiles)},
+                ],
+                "text": {
+                    "format": {
+                        "type": "json_schema",
+                        "name": "contractor_evidence",
+                        "strict": True,
+                        "schema": schema,
+                    }
+                },
+                "max_output_tokens": 700,
             },
-            "max_output_tokens": 700,
-        },
-        timeout=TIMEOUT_SECONDS,
-    )
+        )
     response.raise_for_status()
     return _extract_openai_text(response.json())
 
 
-def _call_nvidia(key: str, request: RecommendationRequest, profiles: list[Profile]) -> str:
+async def _call_nvidia(key: str, request: RecommendationRequest, profiles: list[Profile]) -> str:
     model = os.getenv("NVIDIA_MODEL", "mistralai/mistral-nemotron")
-    response = httpx.post(
-        "https://integrate.api.nvidia.com/v1/chat/completions",
-        headers={"Authorization": f"Bearer {key}"},
-        json={
-            "model": model,
-            "messages": [
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": _payload(request, profiles)},
-            ],
-            "temperature": 0,
-            "max_tokens": 700,
-            "stream": False,
-        },
-        timeout=TIMEOUT_SECONDS,
-    )
+    async with httpx.AsyncClient(timeout=TIMEOUT_SECONDS) as client:
+        response = await client.post(
+            "https://integrate.api.nvidia.com/v1/chat/completions",
+            headers={"Authorization": f"Bearer {key}"},
+            json={
+                "model": model,
+                "messages": [
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": _payload(request, profiles)},
+                ],
+                "temperature": 0,
+                "max_tokens": 700,
+                "stream": False,
+            },
+        )
     response.raise_for_status()
     return response.json()["choices"][0]["message"]["content"]
 
@@ -148,18 +149,23 @@ def _validated_quotes(raw: str, profiles: list[Profile]) -> dict[str, str]:
 def generate_explanations(
     request: RecommendationRequest, profiles: list[Profile]
 ) -> ExplanationResult:
-    provider = os.getenv("AI_PROVIDER", "nvidia").casefold()
+    provider = os.getenv("AI_PROVIDER", "auto").casefold()
+    if provider == "auto":
+        provider = next(
+            (name for name in ("openai", "nvidia") if os.getenv(f"{name.upper()}_API_KEY")),
+            "local",
+        )
     key_name = {"openai": "OPENAI_API_KEY", "nvidia": "NVIDIA_API_KEY"}.get(provider)
     key = os.getenv(key_name, "") if key_name else ""
     if key:
         try:
-            raw = (
+            call = (
                 _call_openai(key, request, profiles)
-                if provider == "openai"
-                else _call_nvidia(key, request, profiles)
+                if provider == "openai" else _call_nvidia(key, request, profiles)
             )
+            raw = asyncio.run(asyncio.wait_for(call, timeout=TIMEOUT_SECONDS))
             return ExplanationResult(_validated_quotes(raw, profiles), provider)
-        except (httpx.HTTPError, ValueError, KeyError, TypeError, IndexError):
+        except (TimeoutError, httpx.HTTPError, ValueError, KeyError, TypeError, IndexError):
             pass
     return ExplanationResult(
         {profile.id: local_quote(profile, request) for profile in profiles},

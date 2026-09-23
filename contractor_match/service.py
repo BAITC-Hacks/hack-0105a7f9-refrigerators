@@ -2,7 +2,14 @@ from __future__ import annotations
 
 from .catalogue import Profile, load_catalogue
 from .explanations import generate_explanations
-from .models import Card, RecommendationRequest, RecommendationResponse
+from .models import (
+    FIRST_DATE,
+    LAST_DATE,
+    Card,
+    CatalogueOptions,
+    RecommendationRequest,
+    RecommendationResponse,
+)
 from .ranking import rank_profiles
 
 
@@ -13,6 +20,30 @@ REASON_LABELS = {
     "wrong_language": "не работают на указанном языке",
     "too_short": "не могут работать столько часов",
 }
+
+
+def _lookup_name(value: str, available: set[str]) -> str | None:
+    normalized = " ".join(value.casefold().split())
+    return next(
+        (name for name in sorted(available) if " ".join(name.casefold().split()) == normalized),
+        None,
+    )
+
+
+def catalogue_options() -> CatalogueOptions:
+    catalogue = load_catalogue()
+    cities = sorted({profile.city for profile in catalogue})
+    return CatalogueOptions(
+        cities=cities,
+        categories_by_city={
+            city: sorted({category for profile in catalogue if profile.city == city for category in profile.categories})
+            for city in cities
+        },
+        event_formats=sorted({value for profile in catalogue for value in profile.event_formats}),
+        languages=sorted({value for profile in catalogue for value in profile.languages}),
+        calendar_start=FIRST_DATE,
+        calendar_end=LAST_DATE,
+    )
 
 
 def _failures(profile: Profile, request: RecommendationRequest) -> tuple[str, ...]:
@@ -63,12 +94,22 @@ def _card_explanation(
 
 def recommend(request: RecommendationRequest) -> RecommendationResponse:
     catalogue = load_catalogue()
-    city_profiles = [profile for profile in catalogue if profile.city == request.city]
-    if not city_profiles:
+    cities = {profile.city for profile in catalogue}
+    categories = {category for profile in catalogue for category in profile.categories}
+    city = _lookup_name(request.city, cities)
+    category = _lookup_name(request.category, categories)
+    if city is None:
         raise ValueError(
             f"Города «{request.city}» нет в каталоге. "
-            f"Доступны: {', '.join(sorted({p.city for p in catalogue}))}."
+            f"Доступны: {', '.join(sorted(cities))}."
         )
+    if category is None:
+        raise ValueError(
+            f"Категории «{request.category}» нет в каталоге. "
+            f"Доступны: {', '.join(sorted(categories))}."
+        )
+    request = request.model_copy(update={"city": city, "category": category})
+    city_profiles = [profile for profile in catalogue if profile.city == request.city]
     category_profiles = [
         profile for profile in city_profiles if request.category in profile.categories
     ]

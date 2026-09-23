@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import httpx
 from fastapi.testclient import TestClient
@@ -136,7 +137,9 @@ class RecommendationTests(unittest.TestCase):
             ]
         }
         with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}), patch(
-            "contractor_match.explanations.httpx.post", return_value=valid_response
+            "contractor_match.explanations.httpx.AsyncClient.post",
+            new_callable=AsyncMock,
+            return_value=valid_response,
         ) as post:
             explained = generate_explanations(item, profiles)
         self.assertEqual(explained.mode, "openai")
@@ -151,14 +154,17 @@ class RecommendationTests(unittest.TestCase):
             ]
         }
         with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}), patch(
-            "contractor_match.explanations.httpx.post", return_value=bad_response
+            "contractor_match.explanations.httpx.AsyncClient.post",
+            new_callable=AsyncMock,
+            return_value=bad_response,
         ):
             explained = generate_explanations(item, profiles)
         self.assertEqual(explained.mode, "fallback")
         self.assertIn(explained.quotes[profiles[1].id], profiles[1].description)
 
         with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}), patch(
-            "contractor_match.explanations.httpx.post",
+            "contractor_match.explanations.httpx.AsyncClient.post",
+            new_callable=AsyncMock,
             side_effect=httpx.TimeoutException("slow"),
         ):
             self.assertEqual(generate_explanations(item, profiles).mode, "fallback")
@@ -178,12 +184,43 @@ class RecommendationTests(unittest.TestCase):
         with patch.dict(
             os.environ, {"AI_PROVIDER": "nvidia", "NVIDIA_API_KEY": "test-key"}
         ), patch(
-            "contractor_match.explanations.httpx.post", return_value=api_response
+            "contractor_match.explanations.httpx.AsyncClient.post",
+            new_callable=AsyncMock,
+            return_value=api_response,
         ) as post:
             explained = generate_explanations(item, profiles)
         self.assertEqual(explained.mode, "nvidia")
         self.assertEqual(post.call_count, 1)
         self.assertIn("integrate.api.nvidia.com", post.call_args.args[0])
+
+    def test_auto_provider_prefers_openai_and_has_total_deadline(self) -> None:
+        item = request()
+        profiles = list(load_catalogue()[:1])
+        quote = quote_candidates(profiles[0])[0]
+        raw = json.dumps({"items": [{"id": profiles[0].id, "quote": quote}]})
+        with patch.dict(os.environ, {
+            "AI_PROVIDER": "auto", "OPENAI_API_KEY": "test-key", "NVIDIA_API_KEY": "test-key"
+        }), patch(
+            "contractor_match.explanations._call_openai",
+            new_callable=AsyncMock,
+            return_value=raw,
+        ) as openai_call, patch(
+            "contractor_match.explanations._call_nvidia", new_callable=AsyncMock
+        ) as nvidia_call:
+            result = generate_explanations(item, profiles)
+        self.assertEqual(result.mode, "openai")
+        openai_call.assert_awaited_once()
+        nvidia_call.assert_not_awaited()
+
+        async def slow_call(*args: object) -> str:
+            await asyncio.sleep(0.1)
+            return raw
+
+        with patch.dict(os.environ, {"AI_PROVIDER": "openai", "OPENAI_API_KEY": "test-key"}), patch(
+            "contractor_match.explanations._call_openai", side_effect=slow_call
+        ), patch("contractor_match.explanations.TIMEOUT_SECONDS", 0.01):
+            result = generate_explanations(item, profiles)
+        self.assertEqual(result.mode, "fallback")
 
     def test_api_contract(self) -> None:
         client = TestClient(app)
@@ -197,6 +234,36 @@ class RecommendationTests(unittest.TestCase):
         wrong_city = request(city="Алматы").model_dump(mode="json")
         wrong_city["city"] = "Караганда"
         self.assertEqual(client.post("/recommendations", json=wrong_city).status_code, 422)
+
+    def test_options_and_case_insensitive_input(self) -> None:
+        client = TestClient(app)
+        options = client.get("/catalogue/options")
+        self.assertEqual(options.status_code, 200)
+        data = options.json()
+        self.assertIn("Алматы", data["cities"])
+        self.assertIn("Ведущий", data["categories_by_city"]["Алматы"])
+        self.assertEqual(data["calendar_start"], "2026-09-23")
+        self.assertEqual(data["calendar_end"], "2026-12-31")
+
+        canonical = request(language="русский")
+        variant = request(
+            city="  алматы  ",
+            category="ведущий",
+            event_format="  КОРПОРАТИВ  ",
+            language="РУССКИЙ",
+        )
+        self.assertEqual(
+            [card.id for card in recommend(canonical).cards],
+            [card.id for card in recommend(variant).cards],
+        )
+        self.assertTrue(all(card.city == "Алматы" for card in recommend(variant).cards))
+        self.assertTrue(all(card.category == "Ведущий" for card in recommend(variant).cards))
+
+        unknown = canonical.model_dump(mode="json")
+        unknown["category"] = "ведущеее"
+        response = client.post("/recommendations", json=unknown)
+        self.assertEqual(response.status_code, 422)
+        self.assertIn("Доступны:", response.json()["detail"])
 
 
 if __name__ == "__main__":
