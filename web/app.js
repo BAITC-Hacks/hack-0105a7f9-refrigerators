@@ -213,11 +213,6 @@ function createCard(card, index) {
   head.append(avatar, identity, price);
   article.append(head);
 
-  const quote = element('div', 'evidence-block');
-  quote.append(element('small', '', 'Из описания подрядчика'), element('p', '', `«${card.evidence_quote}»`));
-  article.append(quote);
-  if (card.why_fits?.length) article.append(list(card.why_fits.slice(0,3), 'facts-list'));
-
   const flags = [];
   if (card.synthetic) flags.push('Синтетический профиль');
   if (card.city_imputed) flags.push('Город восстановлен в данных');
@@ -229,11 +224,22 @@ function createCard(card, index) {
   }
 
   const details = element('details', 'card-details');
-  details.append(element('summary', '', 'Почему подходит и что уточнить'));
-  if (card.explanation) details.append(element('p', '', card.explanation));
-  if (card.evidence_note) details.append(element('p', '', card.evidence_note));
-  if (card.to_clarify?.length) details.append(element('h5', '', 'Уточнить у подрядчика'), list(card.to_clarify, 'detail-list'));
-  if (card.differences?.length) details.append(element('h5', '', 'Отличия среди показанных'), list(card.differences, 'detail-list'));
+  details.append(element('summary', '', 'Подробнее'));
+  const description = element('section', 'detail-section');
+  description.append(element('h5', '', 'Описание'), element('p', '', card.evidence_quote ? `Фрагмент описания: «${card.evidence_quote}»` : 'Описание в каталоге не указано.'));
+  if (card.evidence_note) description.append(element('p', 'detail-note', card.evidence_note));
+  const fit = element('section', 'detail-section');
+  fit.append(element('h5', '', 'Почему подходит именно вам'));
+  if (card.explanation) fit.append(element('p', '', card.explanation));
+  else if (card.why_fits?.length) fit.append(list(card.why_fits, 'detail-list'));
+  else fit.append(element('p', '', 'Дополнительного объяснения нет.'));
+  const clarify = element('section', 'detail-section');
+  clarify.append(element('h5', '', 'Уточнить у подрядчика'));
+  clarify.append(card.to_clarify?.length ? list(card.to_clarify, 'detail-list') : element('p', '', 'Дополнительные вопросы не указаны.'));
+  const differences = element('section', 'detail-section');
+  differences.append(element('h5', '', 'Отличия среди показанных'));
+  differences.append(card.differences?.length ? list(card.differences, 'detail-list') : element('p', '', 'Сравнение с другими показанными подрядчиками недоступно.'));
+  details.append(description, fit, clarify, differences);
   article.append(details);
   article.dataset.cardIndex = String(index);
   return article;
@@ -258,7 +264,6 @@ function renderUnderstanding(understanding) {
 
 function renderMain(result) {
   mainPanel.replaceChildren();
-  mainPanel.append(notice(result.message, result.status === 'matched' ? 'success' : 'info'));
   if (result.cards.length) {
     const cards = element('div', 'cards-list');
     result.cards.forEach((card, index) => cards.append(createCard(card, index)));
@@ -269,6 +274,47 @@ function renderMain(result) {
   }
   const understanding = renderUnderstanding(result.understanding);
   if (understanding) mainPanel.append(understanding);
+  mainPanel.append(renderSelectionSummary(result));
+}
+
+const reasonLabels = {
+  busy: 'Заняты на дату',
+  over_budget: 'Стартовая цена выше бюджета',
+  wrong_format: 'Не работают с указанным форматом',
+  wrong_language: 'Не работают на указанном языке',
+  too_short: 'Не могут работать столько часов',
+};
+
+function renderSelectionSummary(result) {
+  const summary = element('section', 'selection-summary');
+  summary.setAttribute('aria-label', 'Итоги подбора');
+  summary.append(element('h4', '', 'Итоги подбора'));
+  const items = [];
+  if (result.status === 'category_absent') {
+    items.push(result.message);
+  } else {
+    items.push(`Подобрано подрядчиков: ${result.cards.length}.`);
+    if (result.reasons?.busy) items.push(`Заняты на выбранную дату: ${result.reasons.busy}.`);
+    if (result.cards.length < 3) {
+      items.push(`Меньше трёх: из ${result.counts.category_total} профилей категории подходят ${result.counts.eligible_total}.`);
+    } else if (result.counts.eligible_total > 3) {
+      items.push(`Всего подходят ${result.counts.eligible_total}; показаны первые три по ранжированию.`);
+    }
+  }
+  const reasons = Object.entries(reasonLabels)
+    .filter(([key]) => key !== 'busy' && result.reasons?.[key])
+    .map(([key, label]) => `${label}: ${result.reasons[key]}.`);
+  const summaryList = list(items, 'selection-summary-list');
+  if (reasons.length) {
+    const reasonItem = element('li', '', 'Не подошли по другим условиям:');
+    reasonItem.append(list(reasons, 'selection-reasons'));
+    summaryList.append(reasonItem);
+  }
+  summary.append(summaryList);
+  if (Object.values(result.reasons ?? {}).some(Boolean)) {
+    summary.append(element('p', 'selection-summary-note', 'Причины могут пересекаться.'));
+  }
+  return summary;
 }
 
 const fieldNames = {date:'Дата',budget_kzt:'Бюджет',duration_hours:'Длительность'};
