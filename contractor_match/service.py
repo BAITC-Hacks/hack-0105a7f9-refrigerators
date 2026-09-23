@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import time
+
 from .catalogue import Profile, load_catalogue
 from .config import load_settings
 from .explanations import generate_explanations
@@ -12,7 +14,10 @@ from .models import (
     RecommendationResponse,
     SelectionCounts,
 )
-from .ranking import rank_profiles
+from .alternatives import suggest_alternatives
+from .eligibility import failures as _failures
+from .nim import EXTERNAL_BUDGET_SECONDS, select_order
+from .preferences import card_details, understand
 
 
 REASON_LABELS = {
@@ -54,25 +59,6 @@ def catalogue_options() -> CatalogueOptions:
     )
 
 
-def _failures(profile: Profile, request: RecommendationRequest) -> tuple[str, ...]:
-    result: list[str] = []
-    if request.date in profile.busy_dates:
-        result.append("busy")
-    if profile.price_from_kzt > request.budget_kzt:
-        result.append("over_budget")
-    if request.event_format not in profile.event_formats:
-        result.append("wrong_format")
-    if request.language and request.language not in profile.languages:
-        result.append("wrong_language")
-    if (
-        request.duration_hours is not None
-        and profile.max_hours is not None
-        and profile.max_hours < request.duration_hours
-    ):
-        result.append("too_short")
-    return tuple(result)
-
-
 def _reason_text(reasons: dict[str, int]) -> str:
     parts = [
         f"{REASON_LABELS[key]}: {count}"
@@ -107,6 +93,7 @@ def _card_explanation(
 
 def recommend(request: RecommendationRequest) -> RecommendationResponse:
     load_settings()
+    request, understanding = understand(request)
     catalogue = load_catalogue()
     cities = {profile.city for profile in catalogue}
     categories = {category for profile in catalogue for category in profile.categories}
@@ -136,6 +123,8 @@ def recommend(request: RecommendationRequest) -> RecommendationResponse:
             cards=[],
             reasons={},
             ai_mode="not_used",
+            understanding=understanding,
+            alternatives_note="Смена даты, бюджета или длительности не создаст отсутствующую в городе категорию.",
         )
 
     reasons = {key: 0 for key in REASON_LABELS}
@@ -146,6 +135,7 @@ def recommend(request: RecommendationRequest) -> RecommendationResponse:
             reasons[reason] += 1
         if not failures:
             eligible.append(profile)
+    alternatives, alternatives_note = suggest_alternatives(request, category_profiles, eligible)
     if not eligible:
         return RecommendationResponse(
             status="no_eligible",
@@ -158,10 +148,13 @@ def recommend(request: RecommendationRequest) -> RecommendationResponse:
             reasons=reasons,
             ai_mode="not_used",
             counts=SelectionCounts(category_total=len(category_profiles), excluded_total=len(category_profiles)),
+            understanding=understanding, alternatives=alternatives, alternatives_note=alternatives_note,
         )
 
-    selected = rank_profiles(eligible, request)[:3]
-    evidence = generate_explanations(request, selected)
+    deadline = time.monotonic() + EXTERNAL_BUDGET_SECONDS
+    ranking = select_order(eligible, request, deadline)
+    selected = ranking.profiles[:3]
+    evidence = generate_explanations(request, selected, deadline=deadline)
     cards = [
         Card(
             id=profile.id,
@@ -175,6 +168,7 @@ def recommend(request: RecommendationRequest) -> RecommendationResponse:
             explanation=_card_explanation(profile, request, evidence.quotes[profile.id], evidence.notes.get(profile.id)),
             evidence_quote=evidence.quotes[profile.id],
             evidence_note=evidence.notes.get(profile.id),
+            **card_details(profile, selected, request, understanding, evidence.quotes[profile.id]),
         )
         for profile in selected
     ]
@@ -192,6 +186,8 @@ def recommend(request: RecommendationRequest) -> RecommendationResponse:
     return RecommendationResponse(
         status="matched", message=message, cards=cards, reasons=reasons, ai_mode=evidence.mode,
         ai_reason=evidence.reason,
+        understanding=understanding, alternatives=alternatives, alternatives_note=alternatives_note,
+        ranking_mode=ranking.mode, ranking_reason=ranking.reason,
         counts=SelectionCounts(
             category_total=len(category_profiles), eligible_total=len(eligible),
             returned_total=len(cards), excluded_total=len(category_profiles) - len(eligible),

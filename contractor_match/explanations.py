@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 import re
+import time
 from dataclasses import dataclass, field
 
 import httpx
@@ -143,7 +144,10 @@ async def _call_nvidia(
             },
         )
     response.raise_for_status()
-    data = response.json()
+    return _extract_chat_text(response.json())
+
+
+def _extract_chat_text(data: object) -> str:
     if not isinstance(data, dict) or not isinstance(data.get("choices"), list) or not data["choices"]:
         raise InvalidResponse("Нет списка choices")
     choice = data["choices"][0]
@@ -153,6 +157,20 @@ async def _call_nvidia(
     if not isinstance(message, dict) or not isinstance(message.get("content"), str):
         raise InvalidResponse("Нет текста NVIDIA")
     return message["content"]
+
+
+async def _call_brev(settings: AISettings, request: RecommendationRequest, profiles: list[Profile]) -> str:
+    async with httpx.AsyncClient(timeout=TIMEOUT_SECONDS, follow_redirects=False) as client:
+        response = await client.post(
+            settings.base_url + "/chat/completions",
+            headers={"Authorization": f"Bearer {settings.key}"} if settings.key else {},
+            json={"model": settings.model, "messages": [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": _payload(request, profiles)},
+            ], "temperature": 0, "max_tokens": 700, "stream": False},
+        )
+    response.raise_for_status()
+    return _extract_chat_text(response.json())
 
 
 def validate_quotes(
@@ -222,24 +240,29 @@ def _local_result(
 
 
 async def _bounded_call(
-    settings: AISettings, request: RecommendationRequest, profiles: list[Profile]
+    settings: AISettings, request: RecommendationRequest, profiles: list[Profile], timeout: float
 ) -> str:
     call = _call_openai if settings.provider == "openai" else _call_nvidia
+    pending = (_call_brev(settings, request, profiles) if settings.provider == "brev"
+               else call(settings.key, request, profiles, settings.model))
     return await asyncio.wait_for(
-        call(settings.key, request, profiles, settings.model), timeout=TIMEOUT_SECONDS
+        pending, timeout=timeout
     )
 
 
 def generate_explanations(
-    request: RecommendationRequest, profiles: list[Profile]
+    request: RecommendationRequest, profiles: list[Profile], *, deadline: float | None = None
 ) -> ExplanationResult:
     settings = load_settings()
     if not profiles:
         return ExplanationResult({}, "not_used", "not_needed")
     if settings.requested_provider == "local":
         return _local_result(request, profiles, "local_requested")
-    if not settings.key:
+    if not settings.key and settings.provider != "brev":
         return _local_result(request, profiles, "missing_key")
+    timeout = min(TIMEOUT_SECONDS, deadline - time.monotonic()) if deadline is not None else TIMEOUT_SECONDS
+    if timeout <= 0:
+        return _local_result(request, profiles, "timeout")
     # FastAPI runs our synchronous endpoint in a worker. Detect an incorrect direct
     # call from a running loop before creating a coroutine (and leaking it).
     try:
@@ -249,7 +272,7 @@ def generate_explanations(
     else:
         raise RuntimeError("В async-коде вызывайте recommend через asyncio.to_thread.")
     try:
-        raw = asyncio.run(_bounded_call(settings, request, profiles))
+        raw = asyncio.run(_bounded_call(settings, request, profiles, timeout))
         quotes = _validated_quotes(raw, profiles, request)
         return ExplanationResult(quotes, settings.provider, "success", _notes(request, quotes))
     except (TimeoutError, httpx.TimeoutException):
