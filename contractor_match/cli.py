@@ -4,13 +4,6 @@ import argparse
 import json
 import sys
 
-from pydantic import ValidationError
-
-from .config import ConfigurationError
-from .models import RecommendationRequest
-from .service import RecommendationInputError, recommend
-
-
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Подбор event-подрядчиков")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -24,6 +17,9 @@ def build_parser() -> argparse.ArgumentParser:
     command.add_argument("--language")
     command.add_argument("--brief")
     command.add_argument("--json", action="store_true", help="Вывести тот же JSON, что и API")
+    doctor = commands.add_parser("doctor", help="Проверить окружение, CSV и настройки без сетевых вызовов")
+    doctor.add_argument("--json", action="store_true", help="Машиночитаемый отчёт")
+    doctor.add_argument("--frontend-origin", help="Точный origin страницы, например http://localhost:5173")
     return parser
 
 
@@ -32,6 +28,17 @@ def main(argv: list[str] | None = None) -> int:
         sys.stdout.reconfigure(encoding="utf-8")
         sys.stderr.reconfigure(encoding="utf-8")
     args = build_parser().parse_args(argv)
+    if args.command == "doctor":
+        from .doctor import print_report, run_checks
+        return print_report(run_checks(args.frontend_origin), as_json=args.json)
+
+    # Keep doctor usable in a fresh Python environment before pip install.
+    from pydantic import ValidationError
+    from .config import ConfigurationError
+    from .models import RecommendationRequest
+    from .observability import configure_logging
+    from .service import RecommendationInputError, recommend
+    configure_logging()
     try:
         request = RecommendationRequest(
             city=args.city,

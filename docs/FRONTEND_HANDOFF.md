@@ -26,7 +26,7 @@ python -m venv .venv
 $env:AI_PROVIDER = 'local'
 $env:RANKING_PROVIDER = 'tfidf'
 $env:CORS_ALLOWED_ORIGINS = 'http://localhost:5173,http://127.0.0.1:5173'
-.\.venv\Scripts\python.exe -m uvicorn contractor_match.api:app --host 127.0.0.1 --port 8000
+.\.venv\Scripts\python.exe -m uvicorn contractor_match.api:app --host 127.0.0.1 --port 8000 --no-access-log
 ```
 
 Linux / macOS:
@@ -35,7 +35,7 @@ Linux / macOS:
 python3 -m venv .venv
 .venv/bin/python -m pip install -r requirements-lock.txt
 AI_PROVIDER=local RANKING_PROVIDER=tfidf CORS_ALLOWED_ORIGINS=http://localhost:5173 \
-  .venv/bin/python -m uvicorn contractor_match.api:app --host 127.0.0.1 --port 8000
+  .venv/bin/python -m uvicorn contractor_match.api:app --host 127.0.0.1 --port 8000 --no-access-log
 ```
 
 Если окружение уже использует эти версии, повторять установку не нужно. Зафиксированные зависимости помогают воспроизвести OpenAPI и типы. Документация: `http://127.0.0.1:8000/docs`.
@@ -79,6 +79,10 @@ if (response !== null) {
 `null` означает устаревший или отменённый через latest.cancel результат; его не отображают. Для spinner также используйте номер последней отправки, чтобы finally старого запроса не выключил загрузку нового. Прямые api.recommend/options/health принимают `{signal}`. Тайм-аут клиента — 10 секунд, включая чтение JSON; backend отводит внешним моделям общий срок 6 секунд. Отмена в браузере не гарантирует отмену уже начавшегося AI на сервере.
 
 `ApiClientError.kind`: input (ошибка преобразования формы), http (есть status/code/details), network (включая недоступный адрес или CORS), timeout, cancelled, invalid_response. Клиент не повторяет POST автоматически и не подменяет ошибку пустой выдачей. При 422 сопоставляйте `details[].field` с полями формы. Возвращённый сервером текст показывать как текст.
+
+`ApiClientError.requestId` содержит серверный `X-Request-ID`, если ответ успел прийти. Добавьте его к сообщению об ошибке как «Код обращения: …», чтобы разработчик нашёл запрос в журнале. При сетевом сбое номера может не быть. Заголовки `X-Request-ID` и `X-Process-Time-Ms` доступны через CORS; успешные ответы можно проверить во вкладке Network. [Диагностика и логи](DEBUGGING.md).
+
+Для проверки настройки фронтенда: `python -m contractor_match doctor --frontend-origin http://localhost:5173` из того же окружения, где запускается API. Команда проверяет конфигурацию на диске и в окружении, без запросов к серверу или модели.
 
 ### Типы полей формы
 

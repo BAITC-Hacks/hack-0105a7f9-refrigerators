@@ -10,6 +10,7 @@ import httpx
 from .catalogue import Profile
 from .config import RankingSettings, load_ranking_settings
 from .models import RecommendationRequest
+from .observability import log_event
 from .ranking import _query, rank_profiles
 
 
@@ -89,5 +90,5 @@ def select_order(profiles: list[Profile], request: RecommendationRequest, deadli
         reason = "network_error"
     except (ValueError, TypeError, KeyError, OverflowError):
         reason = "invalid_response"
-    logger.info("ranking_fallback provider=brev reason=%s", reason)
+    log_event(logger, "ranking_fallback", provider="brev", reason=reason)
     return RankingResult(rank_profiles(profiles, request), "tfidf", reason)

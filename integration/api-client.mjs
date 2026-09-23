@@ -1,13 +1,14 @@
 /** Framework-neutral browser/Node client. No selection logic or credentials. */
 
 export class ApiClientError extends Error {
-  constructor(kind, message, {status, code, details = []} = {}) {
+  constructor(kind, message, {status, code, details = [], requestId} = {}) {
     super(message);
     this.name = 'ApiClientError';
     this.kind = kind;
     this.status = status;
     this.code = code;
     this.details = details;
+    this.requestId = requestId;
   }
 }
 
@@ -56,12 +57,13 @@ export function createApiClient({baseUrl = '', timeoutMs = 10000, fetchImpl = gl
 
   async function call(path, kind, init, {signal} = {}) {
     const controller = new AbortController();
+    let requestId;
     let rejectAbort;
     let abortError;
     const aborted = new Promise((_, reject) => { rejectAbort = reject; });
     const abort = reason => {
       abortError = new ApiClientError(reason, reason === 'timeout'
-        ? 'Сервер не ответил вовремя. Попробуйте ещё раз.' : 'Запрос отменён.');
+        ? 'Сервер не ответил вовремя. Попробуйте ещё раз.' : 'Запрос отменён.', {requestId});
       controller.abort();
       rejectAbort(abortError);
     };
@@ -75,6 +77,8 @@ export function createApiClient({baseUrl = '', timeoutMs = 10000, fetchImpl = gl
           ...init, signal: controller.signal, credentials: 'omit', cache: 'no-store',
           headers: {Accept: 'application/json', ...(init.body ? {'Content-Type': 'application/json'} : {})},
         });
+        const responseId = response.headers?.get?.('X-Request-ID');
+        if (typeof responseId === 'string' && /^[a-f0-9]{32}$/i.test(responseId)) requestId = responseId.toLowerCase();
         let payload;
         try { payload = await response.json(); }
         catch { payload = null; }
@@ -83,14 +87,14 @@ export function createApiClient({baseUrl = '', timeoutMs = 10000, fetchImpl = gl
           const details = Array.isArray(error.details) ? error.details.filter(item =>
             record(item) && typeof item.field === 'string' && typeof item.message === 'string') : [];
           throw new ApiClientError('http', typeof error.message === 'string' ? error.message : 'Ошибка ответа сервера.', {
-            status: response.status, code: typeof error.code === 'string' ? error.code : `http_${response.status}`, details,
+            status: response.status, code: typeof error.code === 'string' ? error.code : `http_${response.status}`, details, requestId,
           });
         }
         return assertPayload(kind, payload);
       } catch (error) {
         if (abortError) throw abortError;
-        if (error instanceof ApiClientError) throw error;
-        throw new ApiClientError('network', 'Не удалось связаться с сервером. Проверьте соединение и адрес API.');
+        if (error instanceof ApiClientError) { error.requestId ??= requestId; throw error; }
+        throw new ApiClientError('network', 'Не удалось связаться с сервером. Проверьте соединение и адрес API.', {requestId});
       }
     }
     try { return await Promise.race([execute(), aborted]); }

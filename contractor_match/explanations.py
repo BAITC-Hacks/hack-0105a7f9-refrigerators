@@ -12,6 +12,7 @@ import httpx
 from .catalogue import Profile
 from .config import AISettings, load_settings
 from .models import AiMode, AiReason, RecommendationRequest
+from .observability import log_event
 from .ranking import evidence_options, has_negative_brief, local_quotes, quote_candidates
 
 
@@ -286,5 +287,5 @@ def generate_explanations(
         reason = "invalid_evidence"
     except (InvalidResponse, ValueError, TypeError, KeyError, IndexError):
         reason = "invalid_response"
-    logger.info("ai_fallback provider=%s reason=%s", settings.provider, reason)
+    log_event(logger, "ai_fallback", provider=settings.provider, reason=reason)
     return _local_result(request, profiles, reason)

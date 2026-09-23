@@ -13,6 +13,22 @@
         "responses": {
           "200": {
             "description": "Successful Response",
+            "headers": {
+              "X-Request-ID": {
+                "description": "Созданный сервером номер запроса для поиска в логах.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{32}$"
+                }
+              },
+              "X-Process-Time-Ms": {
+                "description": "Время до начала HTTP-ответа в миллисекундах.",
+                "schema": {
+                  "type": "number",
+                  "minimum": 0.0
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -23,6 +39,22 @@
           },
           "500": {
             "description": "Internal Server Error",
+            "headers": {
+              "X-Request-ID": {
+                "description": "Созданный сервером номер запроса для поиска в логах.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{32}$"
+                }
+              },
+              "X-Process-Time-Ms": {
+                "description": "Время до начала HTTP-ответа в миллисекундах.",
+                "schema": {
+                  "type": "number",
+                  "minimum": 0.0
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -33,6 +65,22 @@
           },
           "503": {
             "description": "Service Unavailable",
+            "headers": {
+              "X-Request-ID": {
+                "description": "Созданный сервером номер запроса для поиска в логах.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{32}$"
+                }
+              },
+              "X-Process-Time-Ms": {
+                "description": "Время до начала HTTP-ответа в миллисекундах.",
+                "schema": {
+                  "type": "number",
+                  "minimum": 0.0
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -51,6 +99,22 @@
         "responses": {
           "200": {
             "description": "Successful Response",
+            "headers": {
+              "X-Request-ID": {
+                "description": "Созданный сервером номер запроса для поиска в логах.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{32}$"
+                }
+              },
+              "X-Process-Time-Ms": {
+                "description": "Время до начала HTTP-ответа в миллисекундах.",
+                "schema": {
+                  "type": "number",
+                  "minimum": 0.0
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -61,6 +125,22 @@
           },
           "500": {
             "description": "Internal Server Error",
+            "headers": {
+              "X-Request-ID": {
+                "description": "Созданный сервером номер запроса для поиска в логах.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{32}$"
+                }
+              },
+              "X-Process-Time-Ms": {
+                "description": "Время до начала HTTP-ответа в миллисекундах.",
+                "schema": {
+                  "type": "number",
+                  "minimum": 0.0
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -71,6 +151,22 @@
           },
           "503": {
             "description": "Service Unavailable",
+            "headers": {
+              "X-Request-ID": {
+                "description": "Созданный сервером номер запроса для поиска в логах.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{32}$"
+                }
+              },
+              "X-Process-Time-Ms": {
+                "description": "Время до начала HTTP-ответа в миллисекундах.",
+                "schema": {
+                  "type": "number",
+                  "minimum": 0.0
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -99,6 +195,22 @@
         "responses": {
           "200": {
             "description": "Successful Response",
+            "headers": {
+              "X-Request-ID": {
+                "description": "Созданный сервером номер запроса для поиска в логах.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{32}$"
+                }
+              },
+              "X-Process-Time-Ms": {
+                "description": "Время до начала HTTP-ответа в миллисекундах.",
+                "schema": {
+                  "type": "number",
+                  "minimum": 0.0
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -109,6 +221,22 @@
           },
           "500": {
             "description": "Internal Server Error",
+            "headers": {
+              "X-Request-ID": {
+                "description": "Созданный сервером номер запроса для поиска в логах.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{32}$"
+                }
+              },
+              "X-Process-Time-Ms": {
+                "description": "Время до начала HTTP-ответа в миллисекундах.",
+                "schema": {
+                  "type": "number",
+                  "minimum": 0.0
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -119,6 +247,22 @@
           },
           "503": {
             "description": "Service Unavailable",
+            "headers": {
+              "X-Request-ID": {
+                "description": "Созданный сервером номер запроса для поиска в логах.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{32}$"
+                }
+              },
+              "X-Process-Time-Ms": {
+                "description": "Время до начала HTTP-ответа в миллисекундах.",
+                "schema": {
+                  "type": "number",
+                  "minimum": 0.0
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -129,6 +273,22 @@
           },
           "422": {
             "description": "Unprocessable Content",
+            "headers": {
+              "X-Request-ID": {
+                "description": "Созданный сервером номер запроса для поиска в логах.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{32}$"
+                }
+              },
+              "X-Process-Time-Ms": {
+                "description": "Время до начала HTTP-ответа в миллисекундах.",
+                "schema": {
+                  "type": "number",
+                  "minimum": 0.0
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {

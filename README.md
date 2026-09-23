@@ -29,7 +29,7 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements-lock.txt
 $env:AI_PROVIDER = 'local'
 $env:RANKING_PROVIDER = 'tfidf'
-.\.venv\Scripts\python.exe -m uvicorn contractor_match.api:app --host 127.0.0.1 --port 8000
+.\.venv\Scripts\python.exe -m uvicorn contractor_match.api:app --host 127.0.0.1 --port 8000 --no-access-log
 ~~~
 
 Linux / macOS:
@@ -37,7 +37,7 @@ Linux / macOS:
 ~~~bash
 python3 -m venv .venv
 .venv/bin/python -m pip install -r requirements-lock.txt
-AI_PROVIDER=local RANKING_PROVIDER=tfidf .venv/bin/python -m uvicorn contractor_match.api:app --host 127.0.0.1 --port 8000
+AI_PROVIDER=local RANKING_PROVIDER=tfidf .venv/bin/python -m uvicorn contractor_match.api:app --host 127.0.0.1 --port 8000 --no-access-log
 ~~~
 
 `requirements-lock.txt` фиксирует версии проверенного окружения; `requirements.txt` сохраняет допустимые диапазоны прямых зависимостей. При обновлении зависимостей повторите тесты и проверку экспорта: схема может зависеть от версии FastAPI/Pydantic.
@@ -49,6 +49,17 @@ AI_PROVIDER=local RANKING_PROVIDER=tfidf .venv/bin/python -m uvicorn contractor_
 При запуске проверяются CSV и конфигурация, затем строится индекс. С повреждённым каталогом или неизвестным AI_PROVIDER сервер не стартует. Данные и индекс хранятся в памяти: после изменения CSV требуется перезапуск. Общий парсер допускает маленькие тестовые каталоги; рабочий загрузчик дополнительно проверяет исходные 66 профилей и 13 синтетических.
 
 ## CLI и демонстрация
+
+Самодиагностика без сетевых вызовов:
+
+~~~powershell
+.\.venv\Scripts\python.exe -m contractor_match doctor --frontend-origin http://localhost:5173
+.\.venv\Scripts\python.exe -m contractor_match doctor --json
+~~~
+
+Doctor проверяет Python, зависимости, настройки, CORS, исходный каталог и локальный индекс. Команда работает и до установки пакетов: сообщает об отсутствующих зависимостях. Наличие ключа не означает проверки доступа к модели. Код выхода 1 — ошибка, 0 — локальные проверки пройдены или есть предупреждения.
+
+У ответов API есть `X-Request-ID` для поиска в логах и `X-Process-Time-Ms` для времени до начала ответа. Клиент предоставляет `ApiClientError.requestId`. В stderr пишутся JSON-события с этапами подбора, причинами fallback и безопасным местом сбоя. [Инструкция по диагностике](docs/DEBUGGING.md) показывает, как сохранить журнал и найти ошибку. CLI `--json` сохраняет чистый результат в stdout.
 
 ~~~powershell
 .\.venv\Scripts\python.exe -m contractor_match recommend --city Алматы --date 2026-10-15 --event-format корпоратив --category Ведущий --budget-kzt 1200000 --brief 'спокойный ведущий делового форума'
@@ -174,7 +185,7 @@ $env:NVIDIA_API_KEY = '<ключ NVIDIA Build nvapi-…>'
 | fallback | timeout, auth_error, rate_limited, network_error, provider_error |
 | fallback | invalid_response — повреждённый формат; invalid_evidence — неверные id/цитаты |
 
-Логи отказов содержат только выбранного провайдера и код причины, без ключей, brief и сырых ответов сервера.
+Логи отказов содержат провайдера, код причины и request_id. Отдельная запись подбора показывает времена этапов и счётчики. Ключи, brief, сырые ответы сервера и текст исключений в журналы приложения не попадают.
 
 Отдельный живой прогон при настроенном ключе:
 
@@ -211,7 +222,7 @@ node --test integration/tests/api-client.test.mjs
 
 После изменения схемы обновите файлы для фронтенда командой `python -m contractor_match.export_contract` и включите их в тот же коммит. Режим `--check` обнаруживает расхождение без записи. Экспорт принудительно использует local + tfidf, даже при наличии ключей.
 
-GitHub Actions отключён: тесты и локальное демо запускаются в рабочей среде без расходов на GitHub. На 23.09.2026 локально прошли **46 Python-тестов и 12 тестов JavaScript-клиента**. Подробности — в файле состояния проекта.
+GitHub Actions отключён: тесты и локальное демо запускаются в рабочей среде без расходов на GitHub. На 23.09.2026 локально прошли **58 Python-тестов и 14 тестов JavaScript-клиента**. Подробности — в файле состояния проекта.
 
 [Соответствие исходному ТЗ](docs/REQUIREMENTS.md), [измерения и оценка объяснений](docs/EVALUATION.md), [состояние проекта](docs/PROJECT_STATE.md).
 

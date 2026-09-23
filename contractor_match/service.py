@@ -18,6 +18,7 @@ from .alternatives import suggest_alternatives
 from .eligibility import failures as _failures
 from .nim import EXTERNAL_BUDGET_SECONDS, select_order
 from .preferences import card_details, understand
+from .observability import observed_recommendation, stage
 
 
 REASON_LABELS = {
@@ -91,31 +92,36 @@ def _card_explanation(
     return f"{first}. {second}."
 
 
+@observed_recommendation
 def recommend(request: RecommendationRequest) -> RecommendationResponse:
-    load_settings()
-    request, understanding = understand(request)
-    catalogue = load_catalogue()
-    cities = {profile.city for profile in catalogue}
-    categories = {category for profile in catalogue for category in profile.categories}
-    city = _lookup_name(request.city, cities)
-    category = _lookup_name(request.category, categories)
-    if city is None:
-        raise RecommendationInputError(
-            "city",
-            f"Города «{request.city}» нет в каталоге. "
-            f"Доступны: {', '.join(sorted(cities))}."
-        )
-    if category is None:
-        raise RecommendationInputError(
-            "category",
-            f"Категории «{request.category}» нет в каталоге. "
-            f"Доступны: {', '.join(sorted(categories))}."
-        )
-    request = request.model_copy(update={"city": city, "category": category})
-    city_profiles = [profile for profile in catalogue if profile.city == request.city]
-    category_profiles = [
-        profile for profile in city_profiles if request.category in profile.categories
-    ]
+    with stage("configuration"):
+        load_settings()
+    with stage("understanding"):
+        request, understanding = understand(request)
+    with stage("catalogue"):
+        catalogue = load_catalogue()
+    with stage("scope"):
+        cities = {profile.city for profile in catalogue}
+        categories = {category for profile in catalogue for category in profile.categories}
+        city = _lookup_name(request.city, cities)
+        category = _lookup_name(request.category, categories)
+        if city is None:
+            raise RecommendationInputError(
+                "city",
+                f"Города «{request.city}» нет в каталоге. "
+                f"Доступны: {', '.join(sorted(cities))}."
+            )
+        if category is None:
+            raise RecommendationInputError(
+                "category",
+                f"Категории «{request.category}» нет в каталоге. "
+                f"Доступны: {', '.join(sorted(categories))}."
+            )
+        request = request.model_copy(update={"city": city, "category": category})
+        city_profiles = [profile for profile in catalogue if profile.city == request.city]
+        category_profiles = [
+            profile for profile in city_profiles if request.category in profile.categories
+        ]
     if not category_profiles:
         return RecommendationResponse(
             status="category_absent",
@@ -127,15 +133,17 @@ def recommend(request: RecommendationRequest) -> RecommendationResponse:
             alternatives_note="Смена даты, бюджета или длительности не создаст отсутствующую в городе категорию.",
         )
 
-    reasons = {key: 0 for key in REASON_LABELS}
-    eligible: list[Profile] = []
-    for profile in category_profiles:
-        failures = _failures(profile, request)
-        for reason in failures:
-            reasons[reason] += 1
-        if not failures:
-            eligible.append(profile)
-    alternatives, alternatives_note = suggest_alternatives(request, category_profiles, eligible)
+    with stage("filters"):
+        reasons = {key: 0 for key in REASON_LABELS}
+        eligible: list[Profile] = []
+        for profile in category_profiles:
+            failures = _failures(profile, request)
+            for reason in failures:
+                reasons[reason] += 1
+            if not failures:
+                eligible.append(profile)
+    with stage("alternatives"):
+        alternatives, alternatives_note = suggest_alternatives(request, category_profiles, eligible)
     if not eligible:
         return RecommendationResponse(
             status="no_eligible",
@@ -152,9 +160,11 @@ def recommend(request: RecommendationRequest) -> RecommendationResponse:
         )
 
     deadline = time.monotonic() + EXTERNAL_BUDGET_SECONDS
-    ranking = select_order(eligible, request, deadline)
+    with stage("ranking"):
+        ranking = select_order(eligible, request, deadline)
     selected = ranking.profiles[:3]
-    evidence = generate_explanations(request, selected, deadline=deadline)
+    with stage("explanations"):
+        evidence = generate_explanations(request, selected, deadline=deadline)
     cards = [
         Card(
             id=profile.id,

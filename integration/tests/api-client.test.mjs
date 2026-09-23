@@ -55,6 +55,31 @@ test('422 retains field errors; non-JSON proxy error stays a safe HTTP error', a
   await assert.rejects(broken.recommend(sample.request), error => error.kind === 'http' && error.status === 502 && !error.message.includes('private'));
 });
 
+test('HTTP and malformed response errors retain the server request ID', async () => {
+  const requestId = '0123456789abcdef0123456789abcdef';
+  for (const status of [422, 500, 200]) {
+    const client = createApiClient({fetchImpl: async () => new Response('{}', {
+      status, headers: {'Content-Type': 'application/json', 'X-Request-ID': requestId},
+    })});
+    await assert.rejects(client.recommend(sample.request), error =>
+      error.requestId === requestId && error.kind === (status === 200 ? 'invalid_response' : 'http'));
+  }
+  const invalidId = createApiClient({fetchImpl: async () => new Response('{}', {
+    status: 500, headers: {'X-Request-ID': 'arbitrary-private-value'},
+  })});
+  await assert.rejects(invalidId.recommend(sample.request), error => error.requestId === undefined);
+});
+
+test('body timeout keeps a received request ID; network failure has no invented ID', async () => {
+  const requestId = 'abcdef0123456789abcdef0123456789';
+  const timeout = createApiClient({timeoutMs: 15, fetchImpl: async () => ({
+    ok: true, headers: new Headers({'X-Request-ID': requestId}), json: () => new Promise(() => {}),
+  })});
+  await assert.rejects(timeout.recommend(sample.request), error => error.kind === 'timeout' && error.requestId === requestId);
+  const offline = createApiClient({fetchImpl: async () => { throw Error('offline'); }});
+  await assert.rejects(offline.recommend(sample.request), error => error.kind === 'network' && error.requestId === undefined);
+});
+
 test('invalid successful response is not treated as an empty recommendation', async () => {
   for (const payload of [{}, {status: 'matched', cards: []}, '<html>not API</html>']) {
     const client = createApiClient({fetchImpl: async () => jsonResponse(payload)});

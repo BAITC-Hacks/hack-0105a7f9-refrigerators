@@ -24,14 +24,23 @@ from .models import (
     RecommendationResponse,
 )
 from .ranking import catalog_index
+from .observability import RequestLoggingMiddleware, configure_logging, log_exception
 from .service import RecommendationInputError, catalogue_options, recommend
 
 
 logger = logging.getLogger(__name__)
 
+DIAGNOSTIC_HEADERS = {
+    "X-Request-ID": {"description": "Созданный сервером номер запроса для поиска в логах.",
+                     "schema": {"type": "string", "pattern": "^[a-f0-9]{32}$"}},
+    "X-Process-Time-Ms": {"description": "Время до начала HTTP-ответа в миллисекундах.",
+                          "schema": {"type": "number", "minimum": 0}},
+}
+
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    configure_logging()
     load_settings()
     load_catalogue()
     catalog_index()
@@ -112,8 +121,7 @@ async def safe_unexpected_error(request: Request, call_next):
     try:
         return await call_next(request)
     except Exception as error:
-        # Never log a request, exception message, API key or provider response.
-        logger.error("api_internal_error type=%s", type(error).__name__)
+        log_exception(logger, error)
         payload = ErrorResponse(error=ApiError(
             code="internal_error", message="Не удалось выполнить запрос. Попробуйте ещё раз.", details=[],
         ))
@@ -139,24 +147,27 @@ def create_app() -> FastAPI:
         title="Умный подбор event-подрядчиков",
         description="До трёх проверяемых рекомендаций из каталога HackAlem AI.",
         version="0.2.0", lifespan=lifespan,
-        responses={500: {"model": ErrorResponse}, 503: {"model": ErrorResponse}},
+        responses={200: {"headers": DIAGNOSTIC_HEADERS},
+                   500: {"model": ErrorResponse, "headers": DIAGNOSTIC_HEADERS},
+                   503: {"model": ErrorResponse, "headers": DIAGNOSTIC_HEADERS}},
     )
     api.add_exception_handler(RequestValidationError, request_validation_error)
     api.add_exception_handler(RecommendationInputError, recommendation_input_error)
     api.add_exception_handler(ConfigurationError, configuration_error)
     api.add_exception_handler(HTTPException, http_error)
-    # CORS is outermost, so handled 500s also reach the browser as readable JSON.
+    # CORS wraps the error handler; request tracing also wraps preflight responses.
     api.middleware("http")(safe_unexpected_error)
     api.add_middleware(CORSMiddleware, allow_origins=load_cors_origins(),
                        allow_methods=["GET", "POST"], allow_headers=["Content-Type", "Accept"],
-                       allow_credentials=False)
+                       allow_credentials=False, expose_headers=list(DIAGNOSTIC_HEADERS))
+    api.add_middleware(RequestLoggingMiddleware)
     api.add_api_route("/health", health, methods=["GET"], response_model=HealthResponse,
                       operation_id="getHealth")
     api.add_api_route("/catalogue/options", options, methods=["GET"], response_model=CatalogueOptions,
                       operation_id="getCatalogueOptions")
     api.add_api_route("/recommendations", recommendations, methods=["POST"],
                       response_model=RecommendationResponse, operation_id="recommend",
-                      responses={422: {"model": ErrorResponse}})
+                      responses={422: {"model": ErrorResponse, "headers": DIAGNOSTIC_HEADERS}})
     return api
 
 

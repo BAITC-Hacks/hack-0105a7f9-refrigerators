@@ -6,7 +6,8 @@ export class ApiClientError extends Error {
   status?: number;
   code?: string;
   details: InputIssue[];
-  constructor(kind: ClientErrorKind, message: string, options?: {status?: number; code?: string; details?: InputIssue[]});
+  requestId?: string;
+  constructor(kind: ClientErrorKind, message: string, options?: {status?: number; code?: string; details?: InputIssue[]; requestId?: string});
 }
 export interface CallOptions { signal?: AbortSignal }
 export interface ApiClient {
